@@ -54,8 +54,11 @@ Quick starting guide for new plugin devs:
 - `npm run dev` to start compilation in watch mode.
 
 ## Manually installing the plugin
-
-- Copy over `main.js`, `styles.css`, `manifest.json` to your vault `VaultFolder/.obsidian/plugins/your-plugin-id/`.
+1) Set the path to your Obsidian Vault (found in bottom left 'Open Another Vault' button in Obsidian)
+`export VAULT_PATH="<vault path>"`
+2) Run the following script to copy your local files to your Vault plugins:
+`./deploy-plugin.sh`
+3) Refresh the plugin: In Obsidian, under Preferences -> Community Plugins -> Refresh
 
 ## Improve code quality with eslint (optional)
 - [ESLint](https://eslint.org/) is a tool that analyzes your code to quickly find problems. You can run ESLint against your plugin to find common bugs and ways to improve your code. 
