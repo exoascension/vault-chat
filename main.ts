@@ -1,4 +1,5 @@
 import { App, Editor, MarkdownView, Modal, Notice, Plugin, PluginSettingTab, Setting } from 'obsidian';
+require('fs')
 
 // Remember to rename these classes and interfaces!
 
@@ -34,6 +35,24 @@ export default class MyPlugin extends Plugin {
 			name: 'Open sample modal (simple)',
 			callback: () => {
 				new SampleModal(this.app).open();
+			}
+		});
+
+		// Testing writing to a file
+		this.addCommand({
+			id: 'test-file-writing',
+			name: 'Test File Writing',
+			callback: () => {
+				let dbData = new Map<string, string>([
+					["hello", "world"]
+				]);
+				let writeJson = JSON.stringify(Array.from(dbData.entries()));
+				this.app.vault.create("database2.json", writeJson).then((jsonFile) => {
+					this.app.vault.read(jsonFile).then((readJson) => {
+						console.log("Here's the map!")
+						console.log(new Map(JSON.parse(readJson)));
+					})
+				})
 			}
 		});
 		// This adds an editor command that can perform some operation on the current editor instance
