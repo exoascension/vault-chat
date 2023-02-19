@@ -1,4 +1,6 @@
 import {App, Editor, MarkdownView, Modal, Notice, Plugin, PluginSettingTab, Setting, TFile} from 'obsidian';
+import { Vector, VectorStore } from "./VectorStore";
+
 require('fs')
 
 // Remember to rename these classes and interfaces!
@@ -11,66 +13,15 @@ const DEFAULT_SETTINGS: SemanticSearchSettings = {
 	mySetting: 'default'
 }
 
-type Vector = Array<number>
 
-class VectorStore {
-	constructor(vectorFileContent: string) {
-		this.vectorToFilename = new Map(JSON.parse(vectorFileContent))
-		this.filenameToVector = new Map(Array.from(
-			this.vectorToFilename, entry => [entry[1], entry[0]]))
-	}
 
-	vectorToFilename: Map<Vector, string>;
-	filenameToVector: Map<string, Vector>;
 
-	getByFilename(filename: string): Vector {
-		return this.filenameToVector.get(filename) as Vector
-	}
-	getByVector(vector: Vector): string {
-		return this.vectorToFilename.get(vector) as string
-	}
-	deleteByFilename(filename: string) {
-		const vector = this.filenameToVector.get(filename)
-		if(vector != undefined) {
-			this.vectorToFilename.delete(vector)
-			this.filenameToVector.delete(filename)
-		}
-	}
-
-}
 
 export default class SemanticSearch extends Plugin {
 	settings: SemanticSearchSettings;
 	dbFileName = "database2.json";
 
 	vectorStore: VectorStore;
-
-	loadVectorStore() {
-		const vectorFileExists = this.app.vault.getAbstractFileByPath(this.dbFileName) != null
-
-		if (vectorFileExists) {
-			this.readVectorFile().then((vectorFileContents) => {
-				this.vectorStore = new VectorStore(vectorFileContents)
-			})
-		} else {
-			// TODO need to generate the vectors build the database
-			const mockData = new Map<Vector, string>([
-				[[0,1], "fake-file.md"]
-			]);
-			const mapJson = JSON.stringify(Array.from(mockData.entries()));
-
-			this.app.vault.create(this.dbFileName, mapJson).then((jsonFile) => {
-				this.readVectorFile().then((vectorFileContents) => {
-					this.vectorStore = new VectorStore(vectorFileContents)
-				})
-			})
-		}
-	}
-
-	async readVectorFile(): Promise<string> {
-		const vectorAbstractFile = this.app.vault.getAbstractFileByPath(this.dbFileName)
-		return this.app.vault.read(vectorAbstractFile as TFile)
-	}
 
 	async onload() {
 		await this.loadSettings();
@@ -121,16 +72,21 @@ export default class SemanticSearch extends Plugin {
 			When we update, we use the one we know and then the one we find out
 		 */
 
-		this.registerEvent(this.app.vault.on('delete', (file) => {
-			this.vectorStore.deleteByFilename(file.name)
-		}));
+
 
 		// Testing writing to a file
 		this.addCommand({
 			id: 'test-file-writing',
 			name: 'Test File Writing',
 			callback: () => {
-				this.loadVectorStore()
+				this.vectorStore = new VectorStore(this.app.vault)
+				this.vectorStore.isReady.then(() => {
+					this.vectorStore.addVector("fake-file.md", [0,1])
+
+					this.registerEvent(this.app.vault.on('delete', (file) => {
+						this.vectorStore.deleteByFilename(file.name)
+					}));
+				})
 			}
 		});
 		// This adds an editor command that can perform some operation on the current editor instance
