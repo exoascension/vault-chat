@@ -1,6 +1,5 @@
 import {App, Notice, Plugin, PluginSettingTab, Setting} from 'obsidian';
 import { VectorStore } from "./VectorStore";
-
 require('fs')
 
 // Remember to rename these classes and interfaces!
