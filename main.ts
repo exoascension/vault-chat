@@ -4,7 +4,7 @@ import { VectorStore } from "./VectorStore";
 require('fs')
 
 // Remember to rename these classes and interfaces!
-// TODO source maps, hash of file, npm run dev deploys to obsidian folder (and triggers reload), on file update, improve sort algorithm
+// TODO source maps, hash of file, npm run dev deploys to obsidian folder (and triggers reload), improve sort algorithm
 // "[0,1]" -> unlikely but could be vector collision
 // "{name: filename.md, vector: [0,1]}" -> won't have a collision
 // for search you can filenameToVector.entries()
@@ -48,31 +48,6 @@ export default class SemanticSearch extends Plugin {
 				new SampleModal(this.app).open();
 			}
 		});
-
-		/*
-			Generate vectors:
-				Vector calculation includes file name
-			Initial Load:
-				Get all markdown files
-				Generate vectors
-			Search:
-				Take in a search term
-				Get the vector for the search term
-				Compare search vector to all vectors
-				Closest vector match, return the file name
-			On File Update:
-				Calculate new vector
-				For the file updated, update the vector
-			On File Delete:
-				Remove vector for filename
-
-			Build a double Map for Array<number>, string
-			Persist that to disk
-			Read and generate double
-			When we update, we use the one we know and then the one we find out
-		 */
-
-
 
 		// Testing writing to a file
 		this.addCommand({

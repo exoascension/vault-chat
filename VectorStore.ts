@@ -12,13 +12,11 @@ export class VectorStore {
 		this.isReady = new Promise(resolve => {
 			if (vectorFileExists) {
 				this.readVectorFile().then((vectorFileContents) => {
-					this.vectorToFilename = new Map(JSON.parse(vectorFileContents))
-					this.updateReverseVectorMap()
+					this.filenameToVector = new Map(JSON.parse(vectorFileContents))
 					resolve(true)
 				})
 			} else {
 				this.vault.create(this.dbFilePath, "{}").then((jsonFile) => {
-					this.vectorToFilename = new Map()
 					this.filenameToVector = new Map()
 					resolve(true)
 				})
@@ -29,7 +27,6 @@ export class VectorStore {
 	private vault: Vault;
 	private dbFilePath = "database2.json";
 	// todo make private when we are 'ready' ;)
-	vectorToFilename: Map<Vector, string>;
 	filenameToVector: Map<string, Vector>;
 	isReady: Promise<boolean>;
 
@@ -40,12 +37,7 @@ export class VectorStore {
 
 	private async saveVectorFile() {
 		const absVectorFile = this.vault.getAbstractFileByPath(this.dbFilePath) as TFile
-		await this.vault.modify(absVectorFile, JSON.stringify(Array.from(this.vectorToFilename.entries())))
-	}
-
-	private updateReverseVectorMap() {
-		this.filenameToVector = new Map(Array.from(
-			this.vectorToFilename, entry => [entry[1], entry[0]]))
+		await this.vault.modify(absVectorFile, JSON.stringify(Array.from(this.filenameToVector.entries())))
 	}
 
 	getNearestVectors(searchVector: Vector, resultNumber: number): Map<string, number> {
@@ -74,25 +66,17 @@ export class VectorStore {
 	}
 
 	async addVector(filename: string, vector: Vector) {
-		debugger
-		this.vectorToFilename.set(vector, filename)
 		this.filenameToVector.set(filename, vector)
 		await this.saveVectorFile()
 	}
 
 	async updateVectorByFilename(filename: string, updatedVector: Vector) {
-		const oldVector = this.filenameToVector.get(filename) as Vector
-		this.vectorToFilename.delete(oldVector)
-		this.vectorToFilename.set(updatedVector, filename)
 		this.filenameToVector.set(filename, updatedVector)
 		await this.saveVectorFile()
 	}
 
 	async updateFilename(oldFilename: string, newFilename: string, newVector: Vector) {
-		const oldVector = this.filenameToVector.get(oldFilename) as Vector
-		this.vectorToFilename.delete(oldVector)
 		this.filenameToVector.delete(oldFilename)
-		this.vectorToFilename.set(newVector, newFilename)
 		this.filenameToVector.set(newFilename, newVector)
 		await this.saveVectorFile()
 	}
@@ -100,14 +84,13 @@ export class VectorStore {
 	async deleteByFilename(filename: string) {
 		const vector = this.filenameToVector.get(filename)
 		if(vector != undefined) {
-			this.vectorToFilename.delete(vector)
 			this.filenameToVector.delete(filename)
 			await this.saveVectorFile()
 		}
 	}
 
 	async updateVectorStore(userFiles: Array<TFile>, calculateVector: (file: TFile) => Vector) {
-		const newVectorToFilename: Map<Vector, string> = new Map()
+		const newFilenameToVector: Map<string, Vector> = new Map()
 		let hasChanges = false
 		const userMdFiles = userFiles.filter(file => file.extension === "md")
 		for (const userFile of userMdFiles) {
@@ -116,21 +99,20 @@ export class VectorStore {
 				const fileHasChanged = false
 				if (fileHasChanged) {
 					const newVector = calculateVector(userFile)
-					newVectorToFilename.set(newVector, userFile.name)
+					newFilenameToVector.set(userFile.name, newVector)
 					hasChanges = true
 				} else {
 					const existingVector = this.getByFilename(userFile.name)
-					newVectorToFilename.set(existingVector, userFile.name)
+					newFilenameToVector.set(userFile.name, existingVector)
 				}
 			} else {
 				const newVector = calculateVector(userFile)
-				newVectorToFilename.set(newVector, userFile.name)
+				newFilenameToVector.set(userFile.name, newVector)
 				hasChanges = true
 			}
 		}
 		if (hasChanges) {
-			this.vectorToFilename = newVectorToFilename
-			this.updateReverseVectorMap()
+			this.filenameToVector = newFilenameToVector
 			await this.saveVectorFile()
 		}
 	}
