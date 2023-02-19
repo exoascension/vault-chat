@@ -1,10 +1,10 @@
-import {App, Editor, MarkdownView, Modal, Notice, Plugin, PluginSettingTab, Setting} from 'obsidian';
+import {App, Notice, Plugin, PluginSettingTab, Setting} from 'obsidian';
 import { VectorStore } from "./VectorStore";
 
 require('fs')
 
 // Remember to rename these classes and interfaces!
-// TODO source maps, hash of file, npm run dev deploys to obsidian folder (and triggers reload), improve sort algorithm
+// TODO source maps, hash of file, npm run dev deploys to obsidian folder (and triggers reload), improve sort algorithm, move database2.json to a meta folder, error handle undefined
 // "[0,1]" -> unlikely but could be vector collision
 // "{name: filename.md, vector: [0,1]}" -> won't have a collision
 // for search you can filenameToVector.entries()
@@ -36,49 +36,28 @@ export default class SemanticSearch extends Plugin {
 		// Perform additional things with the ribbon
 		ribbonIconEl.addClass('my-plugin-ribbon-class');
 
-		// This adds a status bar item to the bottom of the app. Does not work on mobile apps.
-		const statusBarItemEl = this.addStatusBarItem();
-		statusBarItemEl.setText('Status Bar Text');
+		this.vectorStore = new VectorStore(this.app.vault)
+		this.vectorStore.isReady.then(async () => {
+			const files = this.app.vault.getFiles()
+			await this.vectorStore.updateVectorStore(files, generateRandomVector)
 
-		// This adds a simple command that can be triggered anywhere
-		this.addCommand({
-			id: 'open-sample-modal-simple',
-			name: 'Open sample modal (simple)',
-			callback: () => {
-				new SampleModal(this.app).open();
-			}
-		});
+			this.registerEvent(this.app.vault.on('delete', (file) => {
+				this.vectorStore.deleteByFilename(file.name)
+			}));
 
-		// Testing writing to a file
-		this.addCommand({
-			id: 'test-file-writing',
-			name: 'Test File Writing',
-			callback: () => {
-				this.vectorStore = new VectorStore(this.app.vault)
-				this.vectorStore.isReady.then(async () => {
-					const files = this.app.vault.getFiles()
-					await this.vectorStore.updateVectorStore(files, generateRandomVector)
+			this.registerEvent(this.app.vault.on('create', (file) => {
+				this.vectorStore.addVector(file.name, generateRandomVector())
+			}));
 
-					this.registerEvent(this.app.vault.on('delete', (file) => {
-						this.vectorStore.deleteByFilename(file.name)
-					}));
+			this.registerEvent(this.app.vault.on('modify', (file) => {
+				this.vectorStore.updateVectorByFilename(file.name, generateRandomVector())
+			}));
 
-					this.registerEvent(this.app.vault.on('create', (file) => {
-						this.vectorStore.addVector(file.name, generateRandomVector())
-					}));
-
-					this.registerEvent(this.app.vault.on('modify', (file) => {
-						this.vectorStore.updateVectorByFilename(file.name, generateRandomVector())
-					}));
-
-					this.registerEvent(this.app.vault.on('rename', (file, oldPath) => {
-						this.vectorStore.deleteByFilename(oldPath)
-						this.vectorStore.addVector(file.name, generateRandomVector())
-					}));
-
-				})
-			}
-		});
+			this.registerEvent(this.app.vault.on('rename', (file, oldPath) => {
+				this.vectorStore.deleteByFilename(oldPath)
+				this.vectorStore.addVector(file.name, generateRandomVector())
+			}));
+		})
 
 		this.addCommand({
 			id: 'test-search',
@@ -88,34 +67,6 @@ export default class SemanticSearch extends Plugin {
 					console.log("search result:")
 					console.log(this.vectorStore.getNearestVectors(generateRandomVector(), 3))
 				})
-			}
-		});
-		// This adds an editor command that can perform some operation on the current editor instance
-		this.addCommand({
-			id: 'sample-editor-command',
-			name: 'Sample editor command',
-			editorCallback: (editor: Editor, view: MarkdownView) => {
-				console.log(editor.getSelection());
-				editor.replaceSelection('Sample Editor Command');
-			}
-		});
-		// This adds a complex command that can check whether the current state of the app allows execution of the command
-		this.addCommand({
-			id: 'open-sample-modal-complex',
-			name: 'Open sample modal (complex)',
-			checkCallback: (checking: boolean) => {
-				// Conditions to check
-				const markdownView = this.app.workspace.getActiveViewOfType(MarkdownView);
-				if (markdownView) {
-					// If checking is true, we're simply "checking" if the command can be run.
-					// If checking is false, then we want to actually perform the operation.
-					if (!checking) {
-						new SampleModal(this.app).open();
-					}
-
-					// This command will only show up in Command Palette when the check function returns true
-					return true;
-				}
 			}
 		});
 
@@ -142,22 +93,6 @@ export default class SemanticSearch extends Plugin {
 
 	async saveSettings() {
 		await this.saveData(this.settings);
-	}
-}
-
-class SampleModal extends Modal {
-	constructor(app: App) {
-		super(app);
-	}
-
-	onOpen() {
-		const {contentEl} = this;
-		contentEl.setText('Woah!');
-	}
-
-	onClose() {
-		const {contentEl} = this;
-		contentEl.empty();
 	}
 }
 
