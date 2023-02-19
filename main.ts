@@ -1,18 +1,18 @@
-import { App, Editor, MarkdownView, Modal, Notice, Plugin, PluginSettingTab, Setting } from 'obsidian';
+import {App, Editor, MarkdownView, Modal, Notice, Plugin, PluginSettingTab, Setting, TFile} from 'obsidian';
 require('fs')
 
 // Remember to rename these classes and interfaces!
 
-interface MyPluginSettings {
+interface SemanticSearchSettings {
 	mySetting: string;
 }
 
-const DEFAULT_SETTINGS: MyPluginSettings = {
+const DEFAULT_SETTINGS: SemanticSearchSettings = {
 	mySetting: 'default'
 }
 
-export default class MyPlugin extends Plugin {
-	settings: MyPluginSettings;
+export default class SemanticSearch extends Plugin {
+	settings: SemanticSearchSettings;
 
 	async onload() {
 		await this.loadSettings();
@@ -43,16 +43,32 @@ export default class MyPlugin extends Plugin {
 			id: 'test-file-writing',
 			name: 'Test File Writing',
 			callback: () => {
-				let dbData = new Map<string, string>([
+				const dbFileName = "database2.json"
+				// return vector map from file
+				const readVectorFile = async () => {
+					const vectorAbstractFile = this.app.vault.getAbstractFileByPath(dbFileName)
+					const vectorFile = await this.app.vault.read(vectorAbstractFile as TFile)
+					return new Map(JSON.parse(vectorFile))
+				}
+				// return true / false if vector file exists
+				const vectorFileExists = this.app.vault.getAbstractFileByPath(dbFileName) != null
+				const dbData = new Map<string, string>([
 					["hello", "world"]
 				]);
-				let writeJson = JSON.stringify(Array.from(dbData.entries()));
-				this.app.vault.create("database2.json", writeJson).then((jsonFile) => {
-					this.app.vault.read(jsonFile).then((readJson) => {
-						console.log("Here's the map!")
-						console.log(new Map(JSON.parse(readJson)));
+				const writeJson = JSON.stringify(Array.from(dbData.entries()));
+				if (vectorFileExists) {
+					readVectorFile().then((vectorMap) => {
+						console.log("READ EXISTING VECTOR MAP")
+						console.log(vectorMap)
 					})
-				})
+				} else {
+					this.app.vault.create(dbFileName, writeJson).then((jsonFile) => {
+						readVectorFile().then((vectorMap) => {
+							console.log("CREATED NEW VECTOR MAP")
+							console.log(vectorMap);
+						})
+					})
+				}
 			}
 		});
 		// This adds an editor command that can perform some operation on the current editor instance
@@ -127,9 +143,9 @@ class SampleModal extends Modal {
 }
 
 class SampleSettingTab extends PluginSettingTab {
-	plugin: MyPlugin;
+	plugin: SemanticSearch;
 
-	constructor(app: App, plugin: MyPlugin) {
+	constructor(app: App, plugin: SemanticSearch) {
 		super(app, plugin);
 		this.plugin = plugin;
 	}
