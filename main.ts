@@ -11,8 +11,25 @@ const DEFAULT_SETTINGS: SemanticSearchSettings = {
 	mySetting: 'default'
 }
 
+type Vector = Array<number>
+
 export default class SemanticSearch extends Plugin {
 	settings: SemanticSearchSettings;
+	dbFileName = "database2.json";
+
+	vectorToFilename: Map<Vector, string>;
+	filenameToVector: Map<string, Vector>;
+
+	async readVectorFile(): Promise<Map<Vector, string>> {
+		const vectorAbstractFile = this.app.vault.getAbstractFileByPath(this.dbFileName)
+		const vectorFile = await this.app.vault.read(vectorAbstractFile as TFile)
+		return new Map(JSON.parse(vectorFile))
+	}
+
+	reverseMap(map: Map<Vector, string>): Map<string, Vector> {
+		return new Map(Array.from(map, entry => [entry[1], entry[0]]))
+	}
+
 
 	async onload() {
 		await this.loadSettings();
@@ -38,34 +55,56 @@ export default class SemanticSearch extends Plugin {
 			}
 		});
 
+		/*
+			new Map(Array.from(origMap, a => a.reverse()))
+
+			Generate vectors:
+				Vector calculation includes file name
+			Initial Load:
+				Get all markdown files
+				Generate vectors
+			Search:
+				Take in a search term
+				Get the vector for the search term
+				Compare search vector to all vectors
+				Closest vector match, return the file name
+			On File Update:
+				Calculate new vector
+				For the file updated, update the vector
+			On File Delete:
+				Remove vector for filename
+
+			Build a double Map for Array<number>, string
+			Persist that to disk
+			Read and generate double
+			When we update, we use the one we know and then the one we find out
+		 */
+
 		// Testing writing to a file
 		this.addCommand({
 			id: 'test-file-writing',
 			name: 'Test File Writing',
 			callback: () => {
-				const dbFileName = "database2.json"
 				// return vector map from file
-				const readVectorFile = async () => {
-					const vectorAbstractFile = this.app.vault.getAbstractFileByPath(dbFileName)
-					const vectorFile = await this.app.vault.read(vectorAbstractFile as TFile)
-					return new Map(JSON.parse(vectorFile))
-				}
 				// return true / false if vector file exists
-				const vectorFileExists = this.app.vault.getAbstractFileByPath(dbFileName) != null
-				const dbData = new Map<string, string>([
-					["hello", "world"]
-				]);
-				const writeJson = JSON.stringify(Array.from(dbData.entries()));
+				const vectorFileExists = this.app.vault.getAbstractFileByPath(this.dbFileName) != null
+
 				if (vectorFileExists) {
-					readVectorFile().then((vectorMap) => {
-						console.log("READ EXISTING VECTOR MAP")
-						console.log(vectorMap)
+					this.readVectorFile().then((vectorMap) => {
+						this.vectorToFilename = vectorMap
+						this.filenameToVector = this.reverseMap(vectorMap)
 					})
 				} else {
-					this.app.vault.create(dbFileName, writeJson).then((jsonFile) => {
-						readVectorFile().then((vectorMap) => {
-							console.log("CREATED NEW VECTOR MAP")
-							console.log(vectorMap);
+					// TODO need to generate the vectors build the database
+					const mockData = new Map<Vector, string>([
+						[[0,1], "fake-file.md"]
+					]);
+					const mapJson = JSON.stringify(Array.from(mockData.entries()));
+
+					this.app.vault.create(this.dbFileName, mapJson).then((jsonFile) => {
+						this.readVectorFile().then((vectorMap) => {
+							this.vectorToFilename = vectorMap
+							this.filenameToVector = this.reverseMap(vectorMap)
 						})
 					})
 				}
