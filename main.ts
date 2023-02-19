@@ -1,9 +1,16 @@
-import {App, Editor, MarkdownView, Modal, Notice, Plugin, PluginSettingTab, Setting, TFile} from 'obsidian';
-import { Vector, VectorStore } from "./VectorStore";
+import {App, Editor, MarkdownView, Modal, Notice, Plugin, PluginSettingTab, Setting} from 'obsidian';
+import { VectorStore } from "./VectorStore";
 
 require('fs')
 
 // Remember to rename these classes and interfaces!
+// TODO source maps, hash of file, npm run dev deploys to obsidian folder (and triggers reload)
+// "[0,1]" -> unlikely but could be vector collision
+// "{name: filename.md, vector: [0,1]}" -> won't have a collision
+// for search you can filenameToVector.entries()
+
+const randNum = () => Math.random() * (Math.round(Math.random()) * 2 - 1)
+const generateRandomVector = () => Array.from(new Array(1536), randNum)
 
 interface SemanticSearchSettings {
 	mySetting: string;
@@ -80,8 +87,9 @@ export default class SemanticSearch extends Plugin {
 			name: 'Test File Writing',
 			callback: () => {
 				this.vectorStore = new VectorStore(this.app.vault)
-				this.vectorStore.isReady.then(() => {
-					this.vectorStore.addVector("fake-file.md", [0,1])
+				this.vectorStore.isReady.then(async () => {
+					const files = this.app.vault.getFiles()
+					await this.vectorStore.updateVectorStore(files, generateRandomVector)
 
 					this.registerEvent(this.app.vault.on('delete', (file) => {
 						this.vectorStore.deleteByFilename(file.name)

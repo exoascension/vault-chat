@@ -4,7 +4,6 @@ export type Vector = Array<number>
 
 export class VectorStore {
 	constructor(vault: Vault) {
-		debugger
 		this.vault = vault
 
 		const vectorFileExists = this.vault.getAbstractFileByPath(this.dbFilePath) != null
@@ -13,8 +12,7 @@ export class VectorStore {
 			if (vectorFileExists) {
 				this.readVectorFile().then((vectorFileContents) => {
 					this.vectorToFilename = new Map(JSON.parse(vectorFileContents))
-					this.filenameToVector = new Map(Array.from(
-						this.vectorToFilename, entry => [entry[1], entry[0]]))
+					this.updateReverseVectorMap()
 					resolve(true)
 				})
 			} else {
@@ -29,8 +27,9 @@ export class VectorStore {
 
 	private vault: Vault;
 	private dbFilePath = "database2.json";
-	private vectorToFilename: Map<Vector, string>;
-	private filenameToVector: Map<string, Vector>;
+	// todo make private when we are 'ready' ;)
+	vectorToFilename: Map<Vector, string>;
+	filenameToVector: Map<string, Vector>;
 	isReady: Promise<boolean>;
 
 	private async readVectorFile(): Promise<string> {
@@ -41,6 +40,11 @@ export class VectorStore {
 	private async saveVectorFile() {
 		const absVectorFile = this.vault.getAbstractFileByPath(this.dbFilePath) as TFile
 		await this.vault.modify(absVectorFile, JSON.stringify(Array.from(this.vectorToFilename.entries())))
+	}
+
+	private updateReverseVectorMap() {
+		this.filenameToVector = new Map(Array.from(
+			this.vectorToFilename, entry => [entry[1], entry[0]]))
 	}
 
 	getByFilename(filename: string): Vector {
@@ -80,6 +84,35 @@ export class VectorStore {
 		if(vector != undefined) {
 			this.vectorToFilename.delete(vector)
 			this.filenameToVector.delete(filename)
+			await this.saveVectorFile()
+		}
+	}
+
+	async updateVectorStore(userFiles: Array<TFile>, calculateVector: (file: TFile) => Vector) {
+		const newVectorToFilename: Map<Vector, string> = new Map()
+		let hasChanges = false
+		const userMdFiles = userFiles.filter(file => file.extension === "md")
+		for (const userFile of userMdFiles) {
+			if (this.getByFilename(userFile.name)) {
+				// todo implement below to compare hash
+				const fileHasChanged = false
+				if (fileHasChanged) {
+					const newVector = calculateVector(userFile)
+					newVectorToFilename.set(newVector, userFile.name)
+					hasChanges = true
+				} else {
+					const existingVector = this.getByFilename(userFile.name)
+					newVectorToFilename.set(existingVector, userFile.name)
+				}
+			} else {
+				const newVector = calculateVector(userFile)
+				newVectorToFilename.set(newVector, userFile.name)
+				hasChanges = true
+			}
+		}
+		if (hasChanges) {
+			this.vectorToFilename = newVectorToFilename
+			this.updateReverseVectorMap()
 			await this.saveVectorFile()
 		}
 	}
