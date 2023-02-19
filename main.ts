@@ -4,7 +4,7 @@ import { VectorStore } from "./VectorStore";
 require('fs')
 
 // Remember to rename these classes and interfaces!
-// TODO source maps, hash of file, npm run dev deploys to obsidian folder (and triggers reload)
+// TODO source maps, hash of file, npm run dev deploys to obsidian folder (and triggers reload), on file update, improve sort algorithm
 // "[0,1]" -> unlikely but could be vector collision
 // "{name: filename.md, vector: [0,1]}" -> won't have a collision
 // for search you can filenameToVector.entries()
@@ -20,13 +20,8 @@ const DEFAULT_SETTINGS: SemanticSearchSettings = {
 	mySetting: 'default'
 }
 
-
-
-
-
 export default class SemanticSearch extends Plugin {
 	settings: SemanticSearchSettings;
-	dbFileName = "database2.json";
 
 	vectorStore: VectorStore;
 
@@ -55,8 +50,6 @@ export default class SemanticSearch extends Plugin {
 		});
 
 		/*
-			new Map(Array.from(origMap, a => a.reverse()))
-
 			Generate vectors:
 				Vector calculation includes file name
 			Initial Load:
@@ -94,6 +87,31 @@ export default class SemanticSearch extends Plugin {
 					this.registerEvent(this.app.vault.on('delete', (file) => {
 						this.vectorStore.deleteByFilename(file.name)
 					}));
+
+					this.registerEvent(this.app.vault.on('create', (file) => {
+						this.vectorStore.addVector(file.name, generateRandomVector())
+					}));
+
+					this.registerEvent(this.app.vault.on('modify', (file) => {
+						this.vectorStore.updateVectorByFilename(file.name, generateRandomVector())
+					}));
+
+					this.registerEvent(this.app.vault.on('rename', (file, oldPath) => {
+						this.vectorStore.deleteByFilename(oldPath)
+						this.vectorStore.addVector(file.name, generateRandomVector())
+					}));
+
+				})
+			}
+		});
+
+		this.addCommand({
+			id: 'test-search',
+			name: 'Test Searching Vector',
+			callback: () => {
+				this.vectorStore.isReady.then(async () => {
+					console.log("search result:")
+					console.log(this.vectorStore.getNearestVectors(generateRandomVector(), 3))
 				})
 			}
 		});

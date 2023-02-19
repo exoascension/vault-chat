@@ -1,4 +1,5 @@
 import {TFile, Vault} from "obsidian";
+import { dot } from "mathjs";
 
 export type Vector = Array<number>
 
@@ -47,12 +48,29 @@ export class VectorStore {
 			this.vectorToFilename, entry => [entry[1], entry[0]]))
 	}
 
-	getByFilename(filename: string): Vector {
-		return this.filenameToVector.get(filename) as Vector
+	getNearestVectors(searchVector: Vector, resultNumber: number): Map<string, number> {
+		const results: Array<[number, string, Vector]> = []
+
+		for (const entry of this.filenameToVector.entries()) {
+			const dotProduct = dot(searchVector, entry[1])
+			results.push([dotProduct, entry[0], entry[1]])
+		}
+
+		results.sort((a, b) => {
+			return a[0]> b[0] ? -1: 1
+		})
+
+		const result: Iterable<[string, number]> = results
+			.splice(0, resultNumber)
+			.map((value) => {
+				return [value[1], value[0]]
+			})
+
+		return new Map(result)
 	}
 
-	getByVector(vector: Vector): string {
-		return this.vectorToFilename.get(vector) as string
+	getByFilename(filename: string): Vector {
+		return this.filenameToVector.get(filename) as Vector
 	}
 
 	async addVector(filename: string, vector: Vector) {
