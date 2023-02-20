@@ -3,10 +3,6 @@ import { VectorStore } from "./VectorStore";
 require('fs')
 
 // Remember to rename these classes and interfaces!
-// TODO source maps, hash of file, npm run dev deploys to obsidian folder (and triggers reload), improve sort algorithm, move database2.json to a meta folder, error handle undefined
-// "[0,1]" -> unlikely but could be vector collision
-// "{name: filename.md, vector: [0,1]}" -> won't have a collision
-// for search you can filenameToVector.entries()
 
 const randNum = () => Math.random() * (Math.round(Math.random()) * 2 - 1)
 const generateRandomVector = () => Array.from(new Array(1536), randNum)
