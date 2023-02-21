@@ -1,6 +1,7 @@
 import esbuild from "esbuild";
 import process from "process";
 import builtins from "builtin-modules";
+import copyStaticFiles from "esbuild-copy-static-files"
 
 const banner =
 `/*
@@ -10,6 +11,7 @@ if you want to view the source, please visit the github repository of this plugi
 `;
 
 const prod = (process.argv[2] === "production");
+const vaultFolder = process.env.VAULT_PATH
 
 const context = await esbuild.context({
 	banner: {
@@ -38,6 +40,15 @@ const context = await esbuild.context({
 	sourcemap: prod ? false : "inline",
 	treeShaking: true,
 	outfile: "main.js",
+	plugins: [copyStaticFiles({
+		src: './',
+		dest: vaultFolder + "/.obsidian/plugins/obsidian-semantic-search",
+		dereference: true,
+		errorOnExist: false,
+		force: true,
+		preserveTimestamps: true,
+		recursive: false,
+	})]
 });
 
 if (prod) {

@@ -48,17 +48,20 @@ Quick starting guide for new plugin devs:
 - Make a pull request at https://github.com/obsidianmd/obsidian-releases to add your plugin.
 
 ## How to use
+You can utilize the Hot-Reload Obsidian plugin along with `npm run dev` to make a fast development workflow without cloning this repo into your plugin folder.
 
+### Initial Setup
+1. Install the Obsidian42-BRAT plugin to easily install unpublished Obsidian Plugins: obsidian://show-plugin?id=obsidian42-brat
+2. Open the Command Palette and run `BRAT: Add a beta plugin for testing`
+3. Enter `https://github.com/pjeby/hot-reload` and click "Add Plugin" to install the hot-reload plugin
+4. Enable the `Hot-Reload` plugin under Obsidian -> Preferences -> Community Plugins
+
+### Dev Workflow
+1. Set `VAULT_PATH` to the directory of your Obsidian Vault:
+   `export VAULT_PATH="<vault path>"`
 - Clone this repo.
 - `npm i` or `yarn` to install dependencies
-- `npm run dev` to start compilation in watch mode.
-
-## Manually installing the plugin
-1) Set the path to your Obsidian Vault (found in bottom left 'Open Another Vault' button in Obsidian)
-`export VAULT_PATH="<vault path>"`
-2) Run the following script to copy your local files to your Vault plugins:
-`./deploy-plugin.sh`
-3) Refresh the plugin: In Obsidian, under Preferences -> Community Plugins -> Refresh
+- `npm run dev` to start compilation in watch mode.  Changes will automatically reload in Obsidian.
 
 ## Improve code quality with eslint (optional)
 - [ESLint](https://eslint.org/) is a tool that analyzes your code to quickly find problems. You can run ESLint against your plugin to find common bugs and ways to improve your code. 
