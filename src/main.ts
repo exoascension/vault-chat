@@ -1,8 +1,7 @@
-import {App, Notice, Plugin, PluginSettingTab, Setting} from 'obsidian';
+import { App, Plugin, PluginSettingTab, Setting } from 'obsidian';
 import { VectorStore } from "./VectorStore";
-require('fs')
+import { VIEW_TYPE_EXAMPLE, SemanticSearchView } from "./semanticSearchView";
 
-// Remember to rename these classes and interfaces!
 
 const randNum = () => Math.random() * (Math.round(Math.random()) * 2 - 1)
 const generateRandomVector = () => Array.from(new Array(1536), randNum)
@@ -18,18 +17,24 @@ const DEFAULT_SETTINGS: SemanticSearchSettings = {
 export default class SemanticSearch extends Plugin {
 	settings: SemanticSearchSettings;
 
+	viewActivated: boolean;
+
 	vectorStore: VectorStore;
 
 	async onload() {
 		await this.loadSettings();
 
 		// This creates an icon in the left ribbon.
-		const ribbonIconEl = this.addRibbonIcon('dice', 'Sample Plugin', (evt: MouseEvent) => {
-			// Called when the user clicks the icon.
-			new Notice('This is a notice!');
+		const ribbonIconEl = this.addRibbonIcon("dice", "Activate view", () => {
+			this.activateView();
 		});
 		// Perform additional things with the ribbon
 		ribbonIconEl.addClass('my-plugin-ribbon-class');
+
+		this.registerView(
+			VIEW_TYPE_EXAMPLE,
+			(leaf) => new SemanticSearchView(leaf)
+		);
 
 		this.vectorStore = new VectorStore(this.app.vault)
 		this.vectorStore.isReady.then(async () => {
@@ -78,8 +83,27 @@ export default class SemanticSearch extends Plugin {
 		this.registerInterval(window.setInterval(() => console.log('setInterval'), 5 * 60 * 1000));
 	}
 
-	onunload() {
+	async activateView() {
+		if (this.viewActivated) {
+			this.app.workspace.detachLeavesOfType(VIEW_TYPE_EXAMPLE);
+			this.viewActivated = false;
+		} else {
+			this.app.workspace.detachLeavesOfType(VIEW_TYPE_EXAMPLE);
 
+			await this.app.workspace.getLeftLeaf(true).setViewState({
+				type: VIEW_TYPE_EXAMPLE,
+				active: true,
+			});
+
+			this.app.workspace.revealLeaf(
+				this.app.workspace.getLeavesOfType(VIEW_TYPE_EXAMPLE)[0]
+			);
+			this.viewActivated = true;
+		}
+	}
+
+	onunload() {
+		this.app.workspace.detachLeavesOfType(VIEW_TYPE_EXAMPLE);
 	}
 
 	async loadSettings() {
