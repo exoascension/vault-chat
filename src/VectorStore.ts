@@ -1,5 +1,6 @@
 import {TFile, Vault} from "obsidian";
-import { dot } from "mathjs";
+// @ts-ignore
+import similarity from "compute-cosine-similarity";
 
 export type Vector = Array<number>
 
@@ -24,8 +25,9 @@ export class VectorStore {
 		})
 	}
 
-	private vault: Vault;
-	private dbFilePath = "database2.json";
+	private vault: Vault
+	private dbFilePath = "database2.json"
+	private relevancePercentage = .01
 	// todo make private when we are 'ready' ;)
 	filenameToVector: Map<string, Vector>;
 	isReady: Promise<boolean>;
@@ -44,8 +46,8 @@ export class VectorStore {
 		const results: Array<[number, string, Vector]> = []
 
 		for (const entry of this.filenameToVector.entries()) {
-			const dotProduct = dot(searchVector, entry[1])
-			results.push([dotProduct, entry[0], entry[1]])
+			const cosineSimilarity = similarity(searchVector, entry[1])
+			results.push([cosineSimilarity, entry[0], entry[1]])
 		}
 
 		results.sort((a, b) => {
@@ -54,6 +56,7 @@ export class VectorStore {
 
 		const result: Iterable<[string, number]> = results
 			.splice(0, resultNumber)
+			.filter(entry => entry[0] > this.relevancePercentage)
 			.map((value) => {
 				return [value[1], value[0]]
 			})
