@@ -1,5 +1,6 @@
-import { App, Plugin, PluginSettingTab, Setting } from 'obsidian';
+import { App, Plugin, PluginSettingTab, Setting, TFile } from 'obsidian';
 import { VectorStore } from "./VectorStore";
+import { OpenAIHandler } from "./OpenAIHandler"
 import { VIEW_TYPE_EXAMPLE, SemanticSearchView } from "./semanticSearchView";
 
 
@@ -11,7 +12,7 @@ interface SemanticSearchSettings {
 }
 
 const DEFAULT_SETTINGS: SemanticSearchSettings = {
-	mySetting: 'default'
+	mySetting: 'OpenAI API key goes here'
 }
 
 export default class SemanticSearch extends Plugin {
@@ -21,9 +22,10 @@ export default class SemanticSearch extends Plugin {
 
 	vectorStore: VectorStore;
 
+	openAIHandler: OpenAIHandler
+
 	async onload() {
 		await this.loadSettings();
-
 		// This creates an icon in the left ribbon.
 		const ribbonIconEl = this.addRibbonIcon("dice", "Activate view", () => {
 			this.activateView();
@@ -38,24 +40,44 @@ export default class SemanticSearch extends Plugin {
 
 		this.vectorStore = new VectorStore(this.app.vault)
 		this.vectorStore.isReady.then(async () => {
+			this.openAIHandler = new OpenAIHandler(this.settings.mySetting)
 			const files = this.app.vault.getFiles()
-			await this.vectorStore.updateVectorStore(files, generateRandomVector)
+			await this.vectorStore.updateVectorStore(files, this.openAIHandler.createEmbedding)
 
 			this.registerEvent(this.app.vault.on('delete', (file) => {
 				this.vectorStore.deleteByFilename(file.name)
 			}));
 
 			this.registerEvent(this.app.vault.on('create', (file) => {
-				this.vectorStore.addVector(file.name, generateRandomVector())
+				if (file instanceof TFile) {
+					this.app.vault.read(file).then((fileContent) => {
+						this.openAIHandler.createEmbedding(`${file.name} ${fileContent}`).then((embedding) => {
+							this.vectorStore.addVector(file.name, embedding) 
+						})
+
+					})
+				}
 			}));
 
 			this.registerEvent(this.app.vault.on('modify', (file) => {
-				this.vectorStore.updateVectorByFilename(file.name, generateRandomVector())
+				if (file instanceof TFile && file.name !== 'database2.json') {
+					this.app.vault.read(file).then((fileContent) => {
+						this.openAIHandler.createEmbedding(`${file.name} ${fileContent}`).then((embedding) => {
+							this.vectorStore.updateVectorByFilename(file.name, embedding) 
+						})
+					})
+				}
 			}));
 
 			this.registerEvent(this.app.vault.on('rename', (file, oldPath) => {
 				this.vectorStore.deleteByFilename(oldPath)
-				this.vectorStore.addVector(file.name, generateRandomVector())
+				if (file instanceof TFile && file.name !== 'database2.json') {
+					this.app.vault.read(file).then((fileContent) => {
+						this.openAIHandler.createEmbedding(`${file.name} ${fileContent}`).then((embedding) => {
+							this.vectorStore.addVector(file.name, embedding) 
+						})
+					})
+				}
 			}));
 		})
 
@@ -71,7 +93,7 @@ export default class SemanticSearch extends Plugin {
 		});
 
 		// This adds a settings tab so the user can configure various aspects of the plugin
-		this.addSettingTab(new SampleSettingTab(this.app, this));
+		this.addSettingTab(new SemanticSearchSettingTab(this.app, this));
 
 		// If the plugin hooks up any global DOM events (on parts of the app that doesn't belong to this plugin)
 		// Using this function will automatically remove the event listener when this plugin is disabled.
@@ -115,7 +137,7 @@ export default class SemanticSearch extends Plugin {
 	}
 }
 
-class SampleSettingTab extends PluginSettingTab {
+class SemanticSearchSettingTab extends PluginSettingTab {
 	plugin: SemanticSearch;
 
 	constructor(app: App, plugin: SemanticSearch) {
@@ -128,16 +150,15 @@ class SampleSettingTab extends PluginSettingTab {
 
 		containerEl.empty();
 
-		containerEl.createEl('h2', {text: 'Settings for my awesome plugin.'});
+		containerEl.createEl('h2', {text: 'Semantic search settings.'});
 
 		new Setting(containerEl)
-			.setName('Setting #1')
-			.setDesc('It\'s a secret')
+			.setName('API key')
+			.setDesc('In order to use semantic search, you need to register an OpenAI account and create a new API key on their website')
 			.addText(text => text
-				.setPlaceholder('Enter your secret')
+				.setPlaceholder('Enter your API key')
 				.setValue(this.plugin.settings.mySetting)
 				.onChange(async (value) => {
-					console.log('Secret: ' + value);
 					this.plugin.settings.mySetting = value;
 					await this.plugin.saveSettings();
 				}));

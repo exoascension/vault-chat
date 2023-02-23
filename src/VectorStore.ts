@@ -92,7 +92,7 @@ export class VectorStore {
 		}
 	}
 
-	async updateVectorStore(userFiles: Array<TFile>, calculateVector: (file: TFile) => Vector) {
+	async updateVectorStore(userFiles: Array<TFile>, createEmbedding: (fileText: string) =>Promise<Vector>) {
 		const newFilenameToVector: Map<string, Vector> = new Map()
 		let hasChanges = false
 		const userMdFiles = userFiles.filter(file => file.extension === "md")
@@ -101,7 +101,7 @@ export class VectorStore {
 				// todo implement below to compare hash
 				const fileHasChanged = false
 				if (fileHasChanged) {
-					const newVector = calculateVector(userFile)
+					const newVector = await app.vault.read(userFile).then((fileContent) => createEmbedding(`${userFile.name} ${fileContent}`))
 					newFilenameToVector.set(userFile.name, newVector)
 					hasChanges = true
 				} else {
@@ -109,7 +109,7 @@ export class VectorStore {
 					newFilenameToVector.set(userFile.name, existingVector)
 				}
 			} else {
-				const newVector = calculateVector(userFile)
+				const newVector = await app.vault.read(userFile).then((fileContent) => createEmbedding(`${userFile.name} ${fileContent}`))
 				newFilenameToVector.set(userFile.name, newVector)
 				hasChanges = true
 			}
