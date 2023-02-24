@@ -1,6 +1,7 @@
 import {TFile, Vault} from "obsidian";
 // @ts-ignore
 import similarity from "compute-cosine-similarity";
+import SemanticSearch from './main'
 
 export type Vector = Array<number>
 
@@ -25,6 +26,7 @@ export class VectorStore {
 		})
 	}
 
+	private plugin: SemanticSearch
 	private vault: Vault
 	private dbFilePath = "database2.json"
 	private relevancePercentage = .01

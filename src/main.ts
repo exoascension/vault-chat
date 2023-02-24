@@ -1,19 +1,12 @@
-import { App, Plugin, PluginSettingTab, Setting, TFile } from 'obsidian';
+import { Plugin, TFile } from 'obsidian';
 import { VectorStore } from "./VectorStore";
 import { OpenAIHandler } from "./OpenAIHandler"
 import { VIEW_TYPE_EXAMPLE, SemanticSearchView } from "./semanticSearchView";
+import { SemanticSearchSettingTab, SemanticSearchSettings, DEFAULT_SETTINGS } from './UserSettings';
 
 
 const randNum = () => Math.random() * (Math.round(Math.random()) * 2 - 1)
 const generateRandomVector = () => Array.from(new Array(1536), randNum)
-
-interface SemanticSearchSettings {
-	mySetting: string;
-}
-
-const DEFAULT_SETTINGS: SemanticSearchSettings = {
-	mySetting: 'OpenAI API key goes here'
-}
 
 export default class SemanticSearch extends Plugin {
 	settings: SemanticSearchSettings;
@@ -40,7 +33,7 @@ export default class SemanticSearch extends Plugin {
 
 		this.vectorStore = new VectorStore(this.app.vault)
 		this.vectorStore.isReady.then(async () => {
-			this.openAIHandler = new OpenAIHandler(this.settings.mySetting)
+			this.openAIHandler = new OpenAIHandler(this.settings.apiSetting)
 			const files = this.app.vault.getFiles()
 			await this.vectorStore.updateVectorStore(files, this.openAIHandler.createEmbedding)
 
@@ -134,33 +127,5 @@ export default class SemanticSearch extends Plugin {
 
 	async saveSettings() {
 		await this.saveData(this.settings);
-	}
-}
-
-class SemanticSearchSettingTab extends PluginSettingTab {
-	plugin: SemanticSearch;
-
-	constructor(app: App, plugin: SemanticSearch) {
-		super(app, plugin);
-		this.plugin = plugin;
-	}
-
-	display(): void {
-		const {containerEl} = this;
-
-		containerEl.empty();
-
-		containerEl.createEl('h2', {text: 'Semantic search settings.'});
-
-		new Setting(containerEl)
-			.setName('API key')
-			.setDesc('In order to use semantic search, you need to register an OpenAI account and create a new API key on their website')
-			.addText(text => text
-				.setPlaceholder('Enter your API key')
-				.setValue(this.plugin.settings.mySetting)
-				.onChange(async (value) => {
-					this.plugin.settings.mySetting = value;
-					await this.plugin.saveSettings();
-				}));
 	}
 }
