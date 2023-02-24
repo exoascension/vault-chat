@@ -29,7 +29,6 @@ export class VectorStore {
 	private plugin: SemanticSearch
 	private vault: Vault
 	private dbFilePath = "database2.json"
-	private relevancePercentage = .01
 	// todo make private when we are 'ready' ;)
 	filenameToVector: Map<string, Vector>;
 	isReady: Promise<boolean>;
@@ -58,7 +57,7 @@ export class VectorStore {
 
 		const result: Iterable<[string, number]> = results
 			.splice(0, resultNumber)
-			.filter(entry => entry[0] > this.relevancePercentage)
+			.filter(entry => entry[0] > this.plugin.settings.relevanceSetting)
 			.map((value) => {
 				return [value[1], value[0]]
 			})

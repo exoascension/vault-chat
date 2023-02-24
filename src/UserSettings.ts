@@ -40,7 +40,7 @@ export class SemanticSearchSettingTab extends PluginSettingTab {
 
 		new Setting(containerEl)
 			.setName('Relevance threshold')
-			.setDesc('Sets the threshold for determining if a search result is relevant.')
+			.setDesc('Sets the threshold for determining if a search result is relevant. A higher value means the search will only return more closely related results')
 			.addSlider((slider: SliderComponent) => {
 				slider
 					.setLimits(0, 1, 0.01)
