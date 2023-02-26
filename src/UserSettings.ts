@@ -13,12 +13,11 @@ export const DEFAULT_SETTINGS: SemanticSearchSettings = {
 
 export class SemanticSearchSettingTab extends PluginSettingTab {
 	plugin: SemanticSearch;
-
 	constructor(app: App, plugin: SemanticSearch) {
 		super(app, plugin);
 		this.plugin = plugin;
 	}
-
+	
 	display(): void {
 		const {containerEl} = this;
 
@@ -47,7 +46,6 @@ export class SemanticSearchSettingTab extends PluginSettingTab {
 					.setValue(this.plugin.settings.relevanceSetting)
 					.setDynamicTooltip()
 					.onChange(async (value) => {
-						console.log(value)
 						this.plugin.settings.relevanceSetting = value
 						await this.plugin.saveSettings()
 					})

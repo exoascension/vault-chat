@@ -80,7 +80,7 @@ export default class SemanticSearch extends Plugin {
 			callback: () => {
 				this.vectorStore.isReady.then(async () => {
 					console.log("search result:")
-					console.log(this.vectorStore.getNearestVectors(generateRandomVector(), 3))
+					console.log(this.vectorStore.getNearestVectors(generateRandomVector(), 3, this.settings.relevanceSetting))
 				})
 			}
 		});

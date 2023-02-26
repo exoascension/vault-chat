@@ -1,7 +1,6 @@
 import {TFile, Vault} from "obsidian";
 // @ts-ignore
 import similarity from "compute-cosine-similarity";
-import SemanticSearch from './main'
 
 export type Vector = Array<number>
 
@@ -26,7 +25,6 @@ export class VectorStore {
 		})
 	}
 
-	private plugin: SemanticSearch
 	private vault: Vault
 	private dbFilePath = "database2.json"
 	// todo make private when we are 'ready' ;)
@@ -43,9 +41,8 @@ export class VectorStore {
 		await this.vault.modify(absVectorFile, JSON.stringify(Array.from(this.filenameToVector.entries())))
 	}
 
-	getNearestVectors(searchVector: Vector, resultNumber: number): Map<string, number> {
+	getNearestVectors(searchVector: Vector, resultNumber: number, relevanceThreshold: number): Map<string, number> {
 		const results: Array<[number, string, Vector]> = []
-
 		for (const entry of this.filenameToVector.entries()) {
 			const cosineSimilarity = similarity(searchVector, entry[1])
 			results.push([cosineSimilarity, entry[0], entry[1]])
@@ -57,7 +54,7 @@ export class VectorStore {
 
 		const result: Iterable<[string, number]> = results
 			.splice(0, resultNumber)
-			.filter(entry => entry[0] > this.plugin.settings.relevanceSetting)
+			.filter(entry => entry[0] > relevanceThreshold)
 			.map((value) => {
 				return [value[1], value[0]]
 			})
