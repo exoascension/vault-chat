@@ -1,15 +1,17 @@
 import { ItemView, WorkspaceLeaf } from "obsidian";
 import * as React from "react";
-import * as ReactDOM from "react-dom";
 import { SearchResults } from "./searchResults";
-import { createRoot } from "react-dom/client";
+import {createRoot, Root} from "react-dom/client";
 import { AppContext } from "./appContext";
 
 export const VIEW_TYPE_EXAMPLE = "semantic-search-view";
 
 export class SemanticSearchView extends ItemView {
+	myRoot: Root;
+	searchResults: Array<string>;
 	constructor(leaf: WorkspaceLeaf) {
 		super(leaf);
+		this.searchResults = []
 	}
 
 	getViewType() {
@@ -20,16 +22,22 @@ export class SemanticSearchView extends ItemView {
 		return "Semantic Search View";
 	}
 
+	updateSearchResults(results: Array<string>) {
+		this.searchResults = results
+		this.myRoot.unmount()
+		this.onOpen()
+	}
+
 	async onOpen() {
-		const root = createRoot(this.containerEl.children[1]);
-		root.render(
+		this.myRoot = createRoot(this.containerEl.children[1]);
+		this.myRoot.render(
 			<AppContext.Provider value={this.app}>
-				<SearchResults />
+				<SearchResults searchResults={this.searchResults} />
 			</AppContext.Provider>,
 		);
 	}
 
 	async onClose() {
-		ReactDOM.unmountComponentAtNode(this.containerEl.children[1]);
+		this.myRoot.unmount()
 	}
 }

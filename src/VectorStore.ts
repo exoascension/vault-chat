@@ -13,12 +13,12 @@ export class VectorStore {
 		this.isReady = new Promise(resolve => {
 			if (vectorFileExists) {
 				this.readVectorFile().then((vectorFileContents) => {
-					this.filenameToVector = new Map(JSON.parse(vectorFileContents))
+					this.filePathToVector = new Map(JSON.parse(vectorFileContents))
 					resolve(true)
 				})
 			} else {
-				this.vault.create(this.dbFilePath, "{}").then((jsonFile) => {
-					this.filenameToVector = new Map()
+				this.vault.create(this.dbFilePath, "[]").then((jsonFile) => {
+					this.filePathToVector = new Map()
 					resolve(true)
 				})
 			}
@@ -27,8 +27,8 @@ export class VectorStore {
 
 	private vault: Vault
 	private dbFilePath = "database2.json"
-	// todo make private when we are 'ready' ;)
-	filenameToVector: Map<string, Vector>;
+
+	private filePathToVector: Map<string, Vector>;
 	isReady: Promise<boolean>;
 
 	private async readVectorFile(): Promise<string> {
@@ -38,12 +38,13 @@ export class VectorStore {
 
 	private async saveVectorFile() {
 		const absVectorFile = this.vault.getAbstractFileByPath(this.dbFilePath) as TFile
-		await this.vault.modify(absVectorFile, JSON.stringify(Array.from(this.filenameToVector.entries())))
+		await this.vault.modify(absVectorFile, JSON.stringify(Array.from(this.filePathToVector.entries())))
 	}
 
 	getNearestVectors(searchVector: Vector, resultNumber: number, relevanceThreshold: number): Map<string, number> {
 		const results: Array<[number, string, Vector]> = []
-		for (const entry of this.filenameToVector.entries()) {
+		
+		for (const entry of this.filePathToVector.entries()) {
 			const cosineSimilarity = similarity(searchVector, entry[1])
 			results.push([cosineSimilarity, entry[0], entry[1]])
 		}
@@ -62,58 +63,58 @@ export class VectorStore {
 		return new Map(result)
 	}
 
-	getByFilename(filename: string): Vector {
-		return this.filenameToVector.get(filename) as Vector
+	getByFilename(filePath: string): Vector {
+		return this.filePathToVector.get(filePath) as Vector
 	}
 
-	async addVector(filename: string, vector: Vector) {
-		this.filenameToVector.set(filename, vector)
+	async addVector(filePath: string, vector: Vector) {
+		this.filePathToVector.set(filePath, vector)
 		await this.saveVectorFile()
 	}
 
-	async updateVectorByFilename(filename: string, updatedVector: Vector) {
-		this.filenameToVector.set(filename, updatedVector)
+	async updateVectorByFilename(filePath: string, updatedVector: Vector) {
+		this.filePathToVector.set(filePath, updatedVector)
 		await this.saveVectorFile()
 	}
 
-	async updateFilename(oldFilename: string, newFilename: string, newVector: Vector) {
-		this.filenameToVector.delete(oldFilename)
-		this.filenameToVector.set(newFilename, newVector)
+	async updateFilename(oldFilePath: string, newFilePath: string, newVector: Vector) {
+		this.filePathToVector.delete(oldFilePath)
+		this.filePathToVector.set(newFilePath, newVector)
 		await this.saveVectorFile()
 	}
 
-	async deleteByFilename(filename: string) {
-		const vector = this.filenameToVector.get(filename)
+	async deleteByFilePath(filepath: string) {
+		const vector = this.filePathToVector.get(filepath)
 		if(vector != undefined) {
-			this.filenameToVector.delete(filename)
+			this.filePathToVector.delete(filepath)
 			await this.saveVectorFile()
 		}
 	}
 
-	async updateVectorStore(userFiles: Array<TFile>, createEmbedding: (fileText: string) =>Promise<Vector>) {
+	async updateVectorStore(userFiles: Array<TFile>, createEmbedding: (fileText: string) => Promise<Vector>) {
 		const newFilenameToVector: Map<string, Vector> = new Map()
 		let hasChanges = false
 		const userMdFiles = userFiles.filter(file => file.extension === "md")
 		for (const userFile of userMdFiles) {
-			if (this.getByFilename(userFile.name)) {
+			if (this.getByFilename(userFile.path)) {
 				// todo implement below to compare hash
 				const fileHasChanged = false
 				if (fileHasChanged) {
-					const newVector = await app.vault.read(userFile).then((fileContent) => createEmbedding(`${userFile.name} ${fileContent}`))
-					newFilenameToVector.set(userFile.name, newVector)
+					const newVector = await app.vault.read(userFile).then((fileContent) => createEmbedding(`${userFile.path} ${fileContent}`))
+					newFilenameToVector.set(userFile.path, newVector)
 					hasChanges = true
 				} else {
-					const existingVector = this.getByFilename(userFile.name)
-					newFilenameToVector.set(userFile.name, existingVector)
+					const existingVector = this.getByFilename(userFile.path)
+					newFilenameToVector.set(userFile.path, existingVector)
 				}
 			} else {
-				const newVector = await app.vault.read(userFile).then((fileContent) => createEmbedding(`${userFile.name} ${fileContent}`))
-				newFilenameToVector.set(userFile.name, newVector)
+				const newVector = await app.vault.read(userFile).then((fileContent) => createEmbedding(`${userFile.path} ${fileContent}`))
+				newFilenameToVector.set(userFile.path, newVector)
 				hasChanges = true
 			}
 		}
 		if (hasChanges) {
-			this.filenameToVector = newFilenameToVector
+			this.filePathToVector = newFilenameToVector
 			await this.saveVectorFile()
 		}
 	}
