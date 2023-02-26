@@ -43,20 +43,9 @@ export const SearchResults: React.FC<Props> = (props: Props) => {
 		<>
 			{
 				resultsToRender.map(result => (
-					<div style={{
-						width: '100%',
-						border: '1px solid #000000',
-						marginBottom: '5px',
-						color: '#dadada',
-						fontFamily: 'ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Inter", "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol", "Microsoft YaHei Light", sans-serif'
-					}} key={result.name} onClick={result.onClick}>
-						<div style={{
-							width: '100%',
-							fontSize: '13px',
-							backgroundColor: '#1e1e1e',
-							padding: '5px'
-						}}>{result.name}</div>
-						<div style={{padding: '5px', fontSize: '12px'}}>{result.contents}</div>
+					<div className={"search-result-card"} key={result.name} onClick={result.onClick}>
+						<div className={"search-result-card-header"}>{result.name}</div>
+						<div  className={"search-result-card-content"}>{result.contents}</div>
 					</div>
 				))
 			}
