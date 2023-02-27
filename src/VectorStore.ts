@@ -27,7 +27,7 @@ export class VectorStore {
 
 	private vault: Vault
 	private dbFilePath = "database2.json"
-	private relevancePercentage = .01
+
 	private filePathToVector: Map<string, Vector>;
 	isReady: Promise<boolean>;
 
@@ -41,9 +41,9 @@ export class VectorStore {
 		await this.vault.modify(absVectorFile, JSON.stringify(Array.from(this.filePathToVector.entries())))
 	}
 
-	getNearestVectors(searchVector: Vector, resultNumber: number): Map<string, number> {
+	getNearestVectors(searchVector: Vector, resultNumber: number, relevanceThreshold: number): Map<string, number> {
 		const results: Array<[number, string, Vector]> = []
-
+		
 		for (const entry of this.filePathToVector.entries()) {
 			const cosineSimilarity = similarity(searchVector, entry[1])
 			results.push([cosineSimilarity, entry[0], entry[1]])
@@ -55,7 +55,7 @@ export class VectorStore {
 
 		const result: Iterable<[string, number]> = results
 			.splice(0, resultNumber)
-			.filter(entry => entry[0] > this.relevancePercentage)
+			.filter(entry => entry[0] > relevanceThreshold)
 			.map((value) => {
 				return [value[1], value[0]]
 			})
