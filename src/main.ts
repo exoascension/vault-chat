@@ -2,10 +2,15 @@ import { Plugin, TFile } from 'obsidian';
 import { VectorStore } from "./VectorStore";
 import { OpenAIHandler } from "./OpenAIHandler"
 import { VIEW_TYPE_EXAMPLE, SemanticSearchView } from "./semanticSearchView";
-import { SemanticSearchSettingTab, SemanticSearchSettings, DEFAULT_SETTINGS } from './UserSettings';
+import { SemanticSearchSettingTab, SemanticSearchSettings } from './UserSettings';
 
 const randNum = () => Math.random() * (Math.round(Math.random()) * 2 - 1)
 const generateRandomVector = () => Array.from(new Array(1536), randNum)
+
+const DEFAULT_SETTINGS: SemanticSearchSettings = {
+	apiKey: 'OpenAI API key goes here',
+	relevanceThreshold: 0.01
+}
 
 export default class SemanticSearch extends Plugin {
 	settings: SemanticSearchSettings;
@@ -39,7 +44,7 @@ export default class SemanticSearch extends Plugin {
 
 		this.vectorStore = new VectorStore(this.app.vault)
 		this.vectorStore.isReady.then(async () => {
-			this.openAIHandler = new OpenAIHandler(this.settings.apiSetting)
+			this.openAIHandler = new OpenAIHandler(this.settings.apiKey)
 			const files = this.app.vault.getFiles()
 			await this.vectorStore.updateVectorStore(files, this.openAIHandler.createEmbedding)
 
@@ -86,7 +91,7 @@ export default class SemanticSearch extends Plugin {
 			callback: () => {
 				this.vectorStore.isReady.then(async () => {
 					console.log("search result:")
-					console.log(this.vectorStore.getNearestVectors(generateRandomVector(), 3, this.settings.relevanceSetting))
+					console.log(this.vectorStore.getNearestVectors(generateRandomVector(), 3, this.settings.relevanceThreshold))
 				})
 			}
 		});
@@ -163,7 +168,7 @@ export default class SemanticSearch extends Plugin {
 
 	async searchForTerm(searchTerm: string): Promise<Array<string>> {
 		return this.openAIHandler.createEmbedding(searchTerm).then((embedding) => {
-			const results = this.vectorStore.getNearestVectors(embedding, 3, this.settings.relevanceSetting)
+			const results = this.vectorStore.getNearestVectors(embedding, 3, this.settings.relevanceThreshold)
 			return Array.from(results.keys())
 		})
 	}

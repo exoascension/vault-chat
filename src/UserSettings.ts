@@ -2,13 +2,8 @@ import { App, PluginSettingTab, Setting, SliderComponent } from 'obsidian'
 import SemanticSearch from './main'
 
 export interface SemanticSearchSettings {
-	apiSetting: string;
-	relevanceSetting: number;
-}
-
-export const DEFAULT_SETTINGS: SemanticSearchSettings = {
-	apiSetting: 'OpenAI API key goes here',
-	relevanceSetting: 0.01
+	apiKey: string;
+	relevanceThreshold: number;
 }
 
 export class SemanticSearchSettingTab extends PluginSettingTab {
@@ -23,17 +18,16 @@ export class SemanticSearchSettingTab extends PluginSettingTab {
 
 		containerEl.empty();
 
-		containerEl.createEl('h2', {text: 'Semantic search settings.'});
+		containerEl.createEl('h2', {text: 'Semantic Search Settings.'});
 
 		new Setting(containerEl)
 			.setName('API key')
 			.setDesc('In order to use semantic search, you need to register an OpenAI account and create a new API key on their website')
 			.addText(text => text
 				.setPlaceholder('Enter your API key')
-				.setValue(this.plugin.settings.apiSetting)
+				.setValue(this.plugin.settings.apiKey)
 				.onChange(async (value) => {
-					console.log(value)
-					this.plugin.settings.apiSetting = value;
+					this.plugin.settings.apiKey = value;
 					await this.plugin.saveSettings();
 				}));
 
@@ -43,10 +37,10 @@ export class SemanticSearchSettingTab extends PluginSettingTab {
 			.addSlider((slider: SliderComponent) => {
 				slider
 					.setLimits(0, 1, 0.01)
-					.setValue(this.plugin.settings.relevanceSetting)
+					.setValue(this.plugin.settings.relevanceThreshold)
 					.setDynamicTooltip()
 					.onChange(async (value) => {
-						this.plugin.settings.relevanceSetting = value
+						this.plugin.settings.relevanceThreshold = value
 						await this.plugin.saveSettings()
 					})
 				}	
