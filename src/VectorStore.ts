@@ -1,4 +1,4 @@
-import {TFile, Vault} from "obsidian";
+import { TFile, Vault } from "obsidian";
 // @ts-ignore
 import similarity from "compute-cosine-similarity";
 
@@ -7,38 +7,35 @@ export type Vector = Array<number>
 export class VectorStore {
 	constructor(vault: Vault) {
 		this.vault = vault
-
-		const vectorFileExists = this.vault.getAbstractFileByPath(this.dbFilePath) != null
-
-		this.isReady = new Promise(resolve => {
-			if (vectorFileExists) {
-				this.readVectorFile().then((vectorFileContents) => {
-					this.filePathToVector = new Map(JSON.parse(vectorFileContents))
-					resolve(true)
-				})
-			} else {
-				this.vault.create(this.dbFilePath, "[]").then((jsonFile) => {
-					this.filePathToVector = new Map()
-					resolve(true)
-				})
-			}
-		})
+		this.initializeFile()
 	}
 
 	private vault: Vault
-	private dbFilePath = "database2.json"
+	private dbFileName = "database2.json"
+	private dbFilePath = `.obsidian/plugins/obsidian-semantic-search/${this.dbFileName}`
 
 	private filePathToVector: Map<string, Vector>;
 	isReady: Promise<boolean>;
 
-	private async readVectorFile(): Promise<string> {
-		const vectorAbstractFile = this.vault.getAbstractFileByPath(this.dbFilePath)
-		return this.vault.read(vectorAbstractFile as TFile)
+	private async initializeFile() {
+		const fileSystemAdapter = this.vault.adapter
+		this.isReady = new Promise(async resolve => {
+			const vectorFileExists = await fileSystemAdapter.exists(this.dbFilePath)
+			if (vectorFileExists) {
+				const vectorFileContents = await fileSystemAdapter.read(this.dbFilePath)
+				this.filePathToVector = new Map(JSON.parse(vectorFileContents))
+				resolve(true)
+			} else {
+				this.filePathToVector = new Map()
+				await fileSystemAdapter.write(this.dbFilePath, JSON.stringify(Array.from(this.filePathToVector.entries())))
+				resolve(true)
+			}
+		})
 	}
 
 	private async saveVectorFile() {
-		const absVectorFile = this.vault.getAbstractFileByPath(this.dbFilePath) as TFile
-		await this.vault.modify(absVectorFile, JSON.stringify(Array.from(this.filePathToVector.entries())))
+		const fileSystemAdapter = this.vault.adapter
+		await fileSystemAdapter.write(this.dbFilePath, JSON.stringify(Array.from(this.filePathToVector.entries())))
 	}
 
 	getNearestVectors(searchVector: Vector, resultNumber: number, relevanceThreshold: number): Map<string, number> {

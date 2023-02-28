@@ -64,7 +64,7 @@ export default class SemanticSearch extends Plugin {
 			}));
 
 			this.registerEvent(this.app.vault.on('modify', (file) => {
-				if (file instanceof TFile && file.name !== 'database2.json') {
+				if (file instanceof TFile) {
 					this.app.vault.read(file).then((fileContent) => {
 						this.openAIHandler.createEmbedding(`${file.path} ${fileContent}`).then((embedding) => {
 							this.vectorStore.updateVectorByFilename(file.path, embedding)
@@ -75,7 +75,7 @@ export default class SemanticSearch extends Plugin {
 
 			this.registerEvent(this.app.vault.on('rename', (file, oldPath) => {
 				this.vectorStore.deleteByFilePath(oldPath)
-				if (file instanceof TFile && file.name !== 'database2.json') {
+				if (file instanceof TFile) {
 					this.app.vault.read(file).then((fileContent) => {
 						this.openAIHandler.createEmbedding(`${file.path} ${fileContent}`).then((embedding) => {
 							this.vectorStore.addVector(file.path, embedding)
