@@ -1,6 +1,7 @@
 import { TFile, Vault } from "obsidian";
 // @ts-ignore
 import similarity from "compute-cosine-similarity";
+import {Throttler} from "./Throttler";
 
 export type Vector = Array<number>
 
@@ -92,12 +93,22 @@ export class VectorStore {
 		const newFilenameToVector: Map<string, Vector> = new Map()
 		let hasChanges = false
 		const userMdFiles = userFiles.filter(file => file.extension === "md")
+		/*
+		   this is the most conservative rate limit for openai
+		   we are throttling this function to ensure indexing the vault will succeed
+		   this is an MVP solution - ideal solution would handle the rate limiting of a specific token since
+		   the rate limit could change over time and different tokens can have different rate limits
+		 */
+		const throttler = new Throttler({
+			tokensPerInterval: 20,
+			interval: "minute"
+		})
 		for (const userFile of userMdFiles) {
 			if (this.getByFilename(userFile.path)) {
 				// todo implement below to compare hash
 				const fileHasChanged = false
 				if (fileHasChanged) {
-					const newVector = await app.vault.read(userFile).then((fileContent) => createEmbedding(`${userFile.path} ${fileContent}`))
+					const newVector = await app.vault.read(userFile).then((fileContent) => throttler.throttleCall(() => createEmbedding(`${userFile.path} ${fileContent}`)))
 					newFilenameToVector.set(userFile.path, newVector)
 					hasChanges = true
 				} else {
@@ -105,7 +116,7 @@ export class VectorStore {
 					newFilenameToVector.set(userFile.path, existingVector)
 				}
 			} else {
-				const newVector = await app.vault.read(userFile).then((fileContent) => createEmbedding(`${userFile.path} ${fileContent}`))
+				const newVector = await app.vault.read(userFile).then((fileContent) => throttler.throttleCall(() => createEmbedding(`${userFile.path} ${fileContent}`)))
 				newFilenameToVector.set(userFile.path, newVector)
 				hasChanges = true
 			}
