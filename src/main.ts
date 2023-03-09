@@ -3,6 +3,7 @@ import { VectorStore } from "./VectorStore";
 import { OpenAIHandler } from "./OpenAIHandler"
 import { VIEW_TYPE_EXAMPLE, SemanticSearchView } from "./semanticSearchView";
 import { SemanticSearchSettingTab, SemanticSearchSettings } from './UserSettings';
+import { debounce } from 'obsidian'
 
 const randNum = () => Math.random() * (Math.round(Math.random()) * 2 - 1)
 const generateRandomVector = () => Array.from(new Array(1536), randNum)
@@ -63,7 +64,7 @@ export default class SemanticSearch extends Plugin {
 				}
 			}));
 
-			this.registerEvent(this.app.vault.on('modify', (file) => {
+			const modifyHandler = debounce((file) => {
 				if (file instanceof TFile) {
 					this.app.vault.read(file).then((fileContent) => {
 						this.openAIHandler.createEmbedding(`${file.path} ${fileContent}`).then((embedding) => {
@@ -71,7 +72,9 @@ export default class SemanticSearch extends Plugin {
 						})
 					})
 				}
-			}));
+			}, 30000, true)
+
+			this.registerEvent(this.app.vault.on('modify', modifyHandler()));
 
 			this.registerEvent(this.app.vault.on('rename', (file, oldPath) => {
 				this.vectorStore.deleteByFilePath(oldPath)
