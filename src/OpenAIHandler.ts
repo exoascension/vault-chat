@@ -13,13 +13,18 @@ export class OpenAIHandler {
 		this.openai = new OpenAIApi(configuration);
 	}
 	
-	createEmbedding = async (fileText: string): Promise<Vector> => {
+	createEmbedding = async (fileText: string): Promise<Vector | undefined> => {
 		let truncatedText = fileText.substring(0, maxInputLength)
-		const entry = await this.openai.createEmbedding({
-			// there is a 1 Gb limit on the input
-			model: "text-embedding-ada-002",
-			input: truncatedText
-		});
-		return entry.data.data[0].embedding
+		try {
+			const entry = await this.openai.createEmbedding({
+				// there is a 1 Gb limit on the input
+				model: "text-embedding-ada-002",
+				input: truncatedText
+			});
+			return entry.data.data[0].embedding
+		} catch (e) {
+			console.error(`Error during createEmbedding call: ${JSON.stringify(e)}`)
+			return undefined
+		}
 	}
 }

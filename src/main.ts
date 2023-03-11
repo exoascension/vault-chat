@@ -57,7 +57,9 @@ export default class SemanticSearch extends Plugin {
 				if (file instanceof TFile) {
 					this.app.vault.read(file).then((fileContent) => {
 						this.openAIHandler.createEmbedding(`${file.path} ${fileContent}`).then((embedding) => {
-							this.vectorStore.addVector(file.path, embedding)
+							if (embedding !== undefined) {
+								this.vectorStore.addVector(file.path, embedding)
+							}
 						})
 
 					})
@@ -68,7 +70,9 @@ export default class SemanticSearch extends Plugin {
 				if (file instanceof TFile) {
 					this.app.vault.read(file).then((fileContent) => {
 						this.openAIHandler.createEmbedding(`${file.path} ${fileContent}`).then((embedding) => {
-							this.vectorStore.updateVectorByFilename(file.path, embedding)
+							if (embedding !== undefined) {
+								this.vectorStore.updateVectorByFilename(file.path, embedding)
+							}
 						})
 					})
 				}
@@ -81,7 +85,9 @@ export default class SemanticSearch extends Plugin {
 				if (file instanceof TFile) {
 					this.app.vault.read(file).then((fileContent) => {
 						this.openAIHandler.createEmbedding(`${file.path} ${fileContent}`).then((embedding) => {
-							this.vectorStore.addVector(file.path, embedding)
+							if (embedding !== undefined) {
+								this.vectorStore.addVector(file.path, embedding)
+							}
 						})
 					})
 				}
@@ -143,10 +149,11 @@ export default class SemanticSearch extends Plugin {
 			let searchTerm = ''
 			if (searchInfoText) {
 				if (searchInfoText.contains("Matches text: \"")) {
-					const startIndex = searchInfoText.indexOf("Matches text: \"")
-					searchTerm = searchInfoText.substring(startIndex + 13)
-					const split = searchTerm.split('"')
-					searchTerm = split[1]
+					const matches = searchInfoText.match(RegExp(`Matches text: \"([^"]*)\"`, 'g'))
+					if (matches) {
+						const matchTerms = matches.map(match => match.split('"')[1])
+						searchTerm = matchTerms.join(' ')
+					}
 				} else if (searchInfoText.contains("Contains exact text: \"")) {
 					const startIndex = searchInfoText.indexOf("Contains exact text: \"")
 					searchTerm = searchInfoText.substring(startIndex + 13)
@@ -170,7 +177,14 @@ export default class SemanticSearch extends Plugin {
 	}
 
 	async searchForTerm(searchTerm: string): Promise<Array<string>> {
+		if (searchTerm === '') {
+			return []
+		}
 		return this.openAIHandler.createEmbedding(searchTerm).then((embedding) => {
+			if (embedding === undefined) {
+				console.error(`Failed to generate vector for search term.`)
+				return []
+			}
 			const results = this.vectorStore.getNearestVectors(embedding, 3, this.settings.relevanceThreshold)
 			return Array.from(results.keys())
 		})

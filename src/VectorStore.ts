@@ -18,6 +18,17 @@ export class VectorStore {
 	private filePathToVector: Map<string, Vector>;
 	isReady: Promise<boolean>;
 
+	/*
+	   this is the most conservative rate limit for openai
+	   we are throttling this function to ensure indexing the vault will succeed
+	   this is an MVP solution - ideal solution would handle the rate limiting of a specific token since
+	   the rate limit could change over time and different tokens can have different rate limits
+	 */
+	private throttler = new Throttler({
+		tokensPerInterval: 20,
+		interval: "minute"
+	})
+
 	private async initializeFile() {
 		const fileSystemAdapter = this.vault.adapter
 		this.isReady = new Promise(async resolve => {
@@ -89,41 +100,61 @@ export class VectorStore {
 		}
 	}
 
-	async updateVectorStore(userFiles: Array<TFile>, createEmbedding: (fileText: string) => Promise<Vector>) {
+	async updateVectorStore(userFiles: Array<TFile>, createEmbedding: (fileText: string) => Promise<Vector | undefined>) {
 		const newFilenameToVector: Map<string, Vector> = new Map()
-		let hasChanges = false
 		const userMdFiles = userFiles.filter(file => file.extension === "md")
-		/*
-		   this is the most conservative rate limit for openai
-		   we are throttling this function to ensure indexing the vault will succeed
-		   this is an MVP solution - ideal solution would handle the rate limiting of a specific token since
-		   the rate limit could change over time and different tokens can have different rate limits
-		 */
-		const throttler = new Throttler({
-			tokensPerInterval: 20,
-			interval: "minute"
-		})
-		for (const userFile of userMdFiles) {
-			if (this.getByFilename(userFile.path)) {
-				// todo implement below to compare hash
-				const fileHasChanged = false
-				if (fileHasChanged) {
-					const newVector = await app.vault.read(userFile).then((fileContent) => throttler.throttleCall(() => createEmbedding(`${userFile.path} ${fileContent}`)))
-					newFilenameToVector.set(userFile.path, newVector)
-					hasChanges = true
+		// batch calls to create embeddings so that it saves as it goes,
+		// and you don't have to start over if it doesn't finish
+		const batchedFiles = this.chunkArray(userMdFiles, 10)
+		for (const batchOfFiles of batchedFiles) {
+			let hasChanges = false
+			for (const userFile of batchOfFiles) {
+				if (this.getByFilename(userFile.path)) {
+					// todo implement below to compare hash
+					const fileHasChanged = false
+					if (fileHasChanged) {
+						const newVector = await this.getNewVector(userFile, createEmbedding)
+						if (newVector !== undefined) {
+							newFilenameToVector.set(userFile.path, newVector)
+							hasChanges = true
+						}
+					} else {
+						const existingVector = this.getByFilename(userFile.path)
+						newFilenameToVector.set(userFile.path, existingVector)
+					}
 				} else {
-					const existingVector = this.getByFilename(userFile.path)
-					newFilenameToVector.set(userFile.path, existingVector)
+					const newVector = await this.getNewVector(userFile, createEmbedding)
+					if (newVector !== undefined) {
+						newFilenameToVector.set(userFile.path, newVector)
+						hasChanges = true
+					}
 				}
-			} else {
-				const newVector = await app.vault.read(userFile).then((fileContent) => throttler.throttleCall(() => createEmbedding(`${userFile.path} ${fileContent}`)))
-				newFilenameToVector.set(userFile.path, newVector)
-				hasChanges = true
+			}
+			if (hasChanges) {
+				this.filePathToVector = newFilenameToVector
+				await this.saveVectorFile()
 			}
 		}
-		if (hasChanges) {
-			this.filePathToVector = newFilenameToVector
-			await this.saveVectorFile()
-		}
+	}
+
+	private async getNewVector(userFile: TFile, createEmbedding: (fileText: string) => Promise<Vector | undefined>): Promise<Vector | undefined> {
+			return app.vault.read(userFile).then((fileContent) =>
+				this.throttler.throttleCall(() =>
+					createEmbedding(`${userFile.path} ${fileContent}`)))
+	}
+
+	// https://stackoverflow.com/a/37826698
+	private chunkArray(inputArray: Array<any>, chunkSize: number) {
+		return inputArray.reduce((resultArray: any[][], item: any, index: number) => {
+			const chunkIndex = Math.floor(index/chunkSize)
+
+			if(!resultArray[chunkIndex]) {
+				resultArray[chunkIndex] = [] // start a new chunk
+			}
+
+			resultArray[chunkIndex].push(item)
+
+			return resultArray
+		}, [])
 	}
 }
