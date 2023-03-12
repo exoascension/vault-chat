@@ -7,7 +7,7 @@ import { AppContext } from "./appContext";
 export const VIEW_TYPE_EXAMPLE = "semantic-search-view";
 
 export class SemanticSearchView extends ItemView {
-	myRoot: Root;
+	myRoot: Root | undefined;
 	searchResults: Array<string>;
 	constructor(leaf: WorkspaceLeaf) {
 		super(leaf);
@@ -24,7 +24,7 @@ export class SemanticSearchView extends ItemView {
 
 	updateSearchResults(results: Array<string>) {
 		this.searchResults = results
-		this.myRoot.unmount()
+		if (this.myRoot) this.myRoot.unmount()
 		this.onOpen()
 	}
 
@@ -38,6 +38,6 @@ export class SemanticSearchView extends ItemView {
 	}
 
 	async onClose() {
-		this.myRoot.unmount()
+		if (this.myRoot) this.myRoot.unmount()
 	}
 }

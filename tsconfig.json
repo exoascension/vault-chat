@@ -3,7 +3,6 @@
     "baseUrl": ".",
     "inlineSourceMap": true,
     "inlineSources": true,
-    "jsx": "react",
     "module": "ESNext",
     "target": "ES6",
     "allowJs": true,
@@ -17,7 +16,8 @@
       "ES5",
       "ES6",
       "ES7"
-    ]
+    ],
+    "jsx": "react-jsx"
   },
   "include": [
     "**/*.ts"

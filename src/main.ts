@@ -1,18 +1,20 @@
-import { Plugin, TFile } from 'obsidian';
+import { Plugin, TFile} from 'obsidian';
 import { VectorStore } from "./VectorStore";
 import { OpenAIHandler } from "./OpenAIHandler"
 import { VIEW_TYPE_EXAMPLE, SemanticSearchView } from "./semanticSearchView";
 import { SemanticSearchSettingTab, SemanticSearchSettings } from './UserSettings';
 import { debounce } from 'obsidian'
-
-const randNum = () => Math.random() * (Math.round(Math.random()) * 2 - 1)
-const generateRandomVector = () => Array.from(new Array(1536), randNum)
+import {ChatGPTModal} from "./ChatGPTModal";
 
 const DEFAULT_SETTINGS: SemanticSearchSettings = {
 	apiKey: 'OpenAI API key goes here',
 	relevanceThreshold: 0.01
 }
 
+export type SearchResult = {
+	name: string;
+	contents: string;
+}
 export default class SemanticSearch extends Plugin {
 	settings: SemanticSearchSettings;
 
@@ -95,12 +97,11 @@ export default class SemanticSearch extends Plugin {
 		})
 
 		this.addCommand({
-			id: 'test-search',
-			name: 'Test Searching Vector',
+			id: 'ask-chatgpt',
+			name: 'Ask ChatGPT',
 			callback: () => {
 				this.vectorStore.isReady.then(async () => {
-					console.log("search result:")
-					console.log(this.vectorStore.getNearestVectors(generateRandomVector(), 3, this.settings.relevanceThreshold))
+					new ChatGPTModal(this.app, this, this.openAIHandler, this.getSearchResultsFiles.bind(this)).open();
 				})
 			}
 		});
@@ -188,6 +189,31 @@ export default class SemanticSearch extends Plugin {
 			const results = this.vectorStore.getNearestVectors(embedding, 3, this.settings.relevanceThreshold)
 			return Array.from(results.keys())
 		})
+	}
+
+	async getSearchResultsFiles(searchTerm: string): Promise<Array<SearchResult>> {
+		const embeddingResponse = await this.openAIHandler.createEmbedding(searchTerm)
+		if (embeddingResponse === undefined) {
+			console.error(`Failed to generate vector for search term.`)
+			return []
+		}
+		const nearestVectors = this.vectorStore.getNearestVectors(embeddingResponse, 3, this.settings.relevanceThreshold)
+		const searchResults = Array.from(nearestVectors.keys())
+		const hydratedResults = []
+		for (const searchResult of searchResults) {
+			const abstractFile = app?.vault.getAbstractFileByPath(searchResult) as TFile
+			const fileContentsOrEmpty = await app?.vault.read(abstractFile)
+			let fileContents: string = fileContentsOrEmpty ? fileContentsOrEmpty : ''
+			if (fileContents.length > 1000) {
+				fileContents = `${fileContents.substring(0, 1000)}...`
+			}
+			const fileName = searchResult.split('/').last()!!
+			hydratedResults.push({
+				name: fileName,
+				contents: fileContents,
+			})
+		}
+		return hydratedResults
 	}
 
 	registerSearchIconObserver() {
