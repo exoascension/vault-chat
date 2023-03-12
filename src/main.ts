@@ -1,7 +1,6 @@
 import { Plugin, TFile} from 'obsidian';
 import { VectorStore } from "./VectorStore";
 import { OpenAIHandler } from "./OpenAIHandler"
-import { VIEW_TYPE_EXAMPLE, SemanticSearchView } from "./semanticSearchView";
 import { SemanticSearchSettingTab, SemanticSearchSettings } from './UserSettings';
 import { debounce } from 'obsidian'
 import {ChatGPTModal} from "./ChatGPTModal";
@@ -20,10 +19,6 @@ export default class SemanticSearch extends Plugin {
 
 	viewActivated: boolean;
 
-	searchIconObserver: MutationObserver;
-
-	searchResultsObserver: MutationObserver;
-
 	searchTerm: string;
 
 	searchActive: boolean = false;
@@ -35,146 +30,60 @@ export default class SemanticSearch extends Plugin {
 	async onload() {
 		await this.loadSettings();
 
-		this.registerView(
-			VIEW_TYPE_EXAMPLE,
-			(leaf) => new SemanticSearchView(leaf)
-		)
-
-		this.app.workspace.onLayoutReady( () => {
-			this.registerSearchIconObserver()
-			this.registerSearchResultsObserver()
-		})
-
+		this.openAIHandler = new OpenAIHandler(this.settings.apiKey)
 		this.vectorStore = new VectorStore(this.app.vault)
 		this.vectorStore.isReady.then(async () => {
-			this.openAIHandler = new OpenAIHandler(this.settings.apiKey)
-			const files = this.app.vault.getFiles()
-			await this.vectorStore.updateVectorStore(files, this.openAIHandler.createEmbedding)
+			const files = this.app.vault.getMarkdownFiles()
+			const indexingPromise = this.vectorStore.updateVectorStore(files, this.openAIHandler.createEmbedding)
 
-			this.registerEvent(this.app.vault.on('delete', (file) => {
-				this.vectorStore.deleteByFilePath(file.path)
-			}));
-
-			this.registerEvent(this.app.vault.on('create', (file) => {
-				if (file instanceof TFile) {
-					this.app.vault.read(file).then((fileContent) => {
-						this.openAIHandler.createEmbedding(`${file.path} ${fileContent}`).then((embedding) => {
-							if (embedding !== undefined) {
-								this.vectorStore.addVector(file.path, embedding)
-							}
-						})
-
-					})
+			this.addCommand({
+				id: 'ask-chatgpt',
+				name: 'Ask ChatGPT',
+				callback: () => {
+					new ChatGPTModal(this.app, this, this.openAIHandler, this.getSearchResultsFiles.bind(this), indexingPromise).open();
+				}
+			});
+			this.registerEvent(this.app.vault.on('create', async (file) => {
+				await indexingPromise
+				if (file instanceof TFile && file.extension === 'md') {
+					const fileExistsInStore = this.vectorStore.getByFilePath(file.path)
+					if (fileExistsInStore !== undefined) {
+						await this.vectorStore.addOrUpdateFile(file, this.openAIHandler.createEmbedding)
+					}
 				}
 			}));
 
-			const modifyHandler = debounce((file) => {
-				if (file instanceof TFile) {
-					this.app.vault.read(file).then((fileContent) => {
-						this.openAIHandler.createEmbedding(`${file.path} ${fileContent}`).then((embedding) => {
-							if (embedding !== undefined) {
-								this.vectorStore.updateVectorByFilename(file.path, embedding)
-							}
-						})
-					})
+			this.registerEvent(this.app.vault.on('delete', async (file) => {
+				if (file instanceof TFile && file.extension === 'md') {
+					await indexingPromise
+					await this.vectorStore.deleteByFilePath(file.path)
+				}
+			}));
+
+			// todo what happens if there are two calls with two different files within 30s
+			const modifyHandler = debounce(async (file) => {
+				if (file instanceof TFile && file.extension === 'md') {
+					await indexingPromise
+					await this.vectorStore.addOrUpdateFile(file, this.openAIHandler.createEmbedding)
 				}
 			}, 30000, true)
 
 			this.registerEvent(this.app.vault.on('modify', modifyHandler()));
 
-			this.registerEvent(this.app.vault.on('rename', (file, oldPath) => {
-				this.vectorStore.deleteByFilePath(oldPath)
-				if (file instanceof TFile) {
-					this.app.vault.read(file).then((fileContent) => {
-						this.openAIHandler.createEmbedding(`${file.path} ${fileContent}`).then((embedding) => {
-							if (embedding !== undefined) {
-								this.vectorStore.addVector(file.path, embedding)
-							}
-						})
-					})
+			this.registerEvent(this.app.vault.on('rename', async (file, oldPath) => {
+				if (file instanceof TFile && file.extension === 'md') {
+					await indexingPromise
+					await this.vectorStore.deleteByFilePath(oldPath)
+					await this.vectorStore.addOrUpdateFile(file, this.openAIHandler.createEmbedding)
 				}
 			}));
 		})
-
-		this.addCommand({
-			id: 'ask-chatgpt',
-			name: 'Ask ChatGPT',
-			callback: () => {
-				this.vectorStore.isReady.then(async () => {
-					new ChatGPTModal(this.app, this, this.openAIHandler, this.getSearchResultsFiles.bind(this)).open();
-				})
-			}
-		});
 
 		// This adds a settings tab so the user can configure various aspects of the plugin
 		this.addSettingTab(new SemanticSearchSettingTab(this.app, this));
 	}
 
-	showSemanticSearchPanel() {
-		this.app.workspace.detachLeavesOfType(VIEW_TYPE_EXAMPLE);
-		this.app.workspace.getLeftLeaf(true).setViewState({
-			type: VIEW_TYPE_EXAMPLE,
-			active: true,
-		}).then(() => {
-			const leavesOfType = this.app.workspace.getLeavesOfType(VIEW_TYPE_EXAMPLE)
-			if (leavesOfType.length > 0) {
-				this.app.workspace.revealLeaf(
-					leavesOfType[0]
-				);
-			}
-
-			this.viewActivated = true
-		})
-	}
-
-	hideSemanticSearchPanel() {
-		this.app.workspace.detachLeavesOfType(VIEW_TYPE_EXAMPLE);
-		this.viewActivated = false
-		this.searchTerm = ''
-	}
-
 	onunload() {
-		this.searchIconObserver.disconnect()
-		this.searchResultsObserver.disconnect()
-		this.app.workspace.getActiveViewOfType(SemanticSearchView)?.onClose()
-		this.app.workspace.detachLeavesOfType(VIEW_TYPE_EXAMPLE);
-	}
-
-	registerSearchResultsObserver() {
-		const searchLeaf = this.app.workspace.getLeavesOfType('search')[0]
-		const searchContainerEl = searchLeaf.view.containerEl
-		const searchInfoEl = searchContainerEl.find(".search-info-container")
-		const searchResultContainerEl = searchContainerEl.find(".search-result-container")
-		this.searchResultsObserver = new MutationObserver(() => {
-			const searchInfoText = searchInfoEl.textContent
-			let searchTerm = ''
-			if (searchInfoText) {
-				if (searchInfoText.contains("Matches text: \"")) {
-					const matches = searchInfoText.match(RegExp(`Matches text: \"([^"]*)\"`, 'g'))
-					if (matches) {
-						const matchTerms = matches.map(match => match.split('"')[1])
-						searchTerm = matchTerms.join(' ')
-					}
-				} else if (searchInfoText.contains("Contains exact text: \"")) {
-					const startIndex = searchInfoText.indexOf("Contains exact text: \"")
-					searchTerm = searchInfoText.substring(startIndex + 13)
-					const split = searchTerm.split('"')
-					searchTerm = split[1]
-				}
-			}
-			const prevSearchTerm = this.searchTerm
-			if (searchTerm !== prevSearchTerm) {
-				this.searchTerm = searchTerm
-				this.searchForTerm(searchTerm).then((results) => {
-					const view = this.app.workspace.getLeavesOfType(VIEW_TYPE_EXAMPLE)[0].view as SemanticSearchView
-					view.updateSearchResults(results)
-				})
-			}
-		})
-		this.searchResultsObserver.observe(searchResultContainerEl, {
-			childList: true,
-			subtree: true
-		})
 	}
 
 	async searchForTerm(searchTerm: string): Promise<Array<string>> {
@@ -214,36 +123,6 @@ export default class SemanticSearch extends Plugin {
 			})
 		}
 		return hydratedResults
-	}
-
-	registerSearchIconObserver() {
-		const appContainerEl = this.app.workspace.containerEl
-		const searchIconEl = appContainerEl.find("[aria-label=Search]")
-
-		/*
-		Watches the Search icon for `is-active` to be added or removed from the classes.
-		The presence of `is-active` indicates the search panel is visible and ours should be too.
-		*/
-		this.searchIconObserver = new MutationObserver((
-			mutations: MutationRecord[]
-		) => {
-			for(const mutation of mutations) {
-				if (mutation.type === 'attributes' && mutation.attributeName === 'class') {
-					const isActive = (mutation.target as HTMLElement).attributes.getNamedItem('class')?.value.contains('is-active')
-					if (isActive !== this.viewActivated) {
-						if (isActive) {
-							this.showSemanticSearchPanel()
-						} else {
-							this.hideSemanticSearchPanel()
-						}
-					}
-				}
-			}
-		})
-		this.searchIconObserver.observe(searchIconEl, {
-			attributes: true,
-			attributeFilter: [ 'class' ]
-		})
 	}
 
 	async loadSettings() {

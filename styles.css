@@ -49,6 +49,11 @@ If your plugin does not need CSS, delete this file.
 	color: var(--color-blue)
 }
 
+.chat-indexing-banner {
+	font-style: italic;
+	color: var(--text-accent);
+}
+
 .chat-input-layout {
 	display: flex
 }
@@ -58,7 +63,8 @@ If your plugin does not need CSS, delete this file.
 }
 
 .button-disabled {
-	/*background-color: var(-);;*/
 	cursor: not-allowed;
+	background-color: var(--background-secondary);
+	color: var(--text-faint);
 }
 

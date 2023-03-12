@@ -12,16 +12,25 @@ export class ChatGPTModal extends Modal {
 	openAIHandler: OpenAIHandler;
 	getSearchResultsFiles: Function;
 
-	constructor(app: App, plugin: SemanticSearch, openAIHandler: OpenAIHandler, getSearchResultsFiles: Function) {
+	isIndexingComplete: Promise<boolean>
+
+	constructor(app: App, plugin: SemanticSearch, openAIHandler: OpenAIHandler, getSearchResultsFiles: Function, isIndexingComplete: Promise<boolean>) {
 		super(app);
 		this.plugin = plugin;
 		this.openAIHandler = openAIHandler;
 		this.getSearchResultsFiles = getSearchResultsFiles;
+		this.isIndexingComplete = isIndexingComplete;
 	}
 
 	onOpen() {
 		this.myRoot = createRoot(this.contentEl)
-		this.myRoot.render(<ChatGPTModalComponent openAIHandler={this.openAIHandler} getSearchResultsFiles={this.getSearchResultsFiles}/>)
+		this.myRoot.render(
+			<ChatGPTModalComponent
+				openAIHandler={this.openAIHandler}
+				getSearchResultsFiles={this.getSearchResultsFiles}
+				isIndexingComplete={this.isIndexingComplete}
+			/>
+		)
 	}
 
 	onClose() {

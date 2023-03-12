@@ -17,6 +17,7 @@ export class VectorStore {
 
 	private filePathToVector: Map<string, Vector>;
 	isReady: Promise<boolean>;
+	isIndexingComplete: Promise<boolean>;
 
 	/*
 	   this is the most conservative rate limit for openai
@@ -35,17 +36,23 @@ export class VectorStore {
 			const vectorFileExists = await fileSystemAdapter.exists(this.dbFilePath)
 			if (vectorFileExists) {
 				const vectorFileContents = await fileSystemAdapter.read(this.dbFilePath)
-				this.filePathToVector = new Map(JSON.parse(vectorFileContents))
+				try {
+					this.filePathToVector = new Map(JSON.parse(vectorFileContents))
+				} catch (e) {
+					console.error(`Unable to load existing database json, starting fresh`, e)
+					this.filePathToVector = new Map()
+					await this.saveVectorFile()
+				}
 				resolve(true)
 			} else {
 				this.filePathToVector = new Map()
-				await fileSystemAdapter.write(this.dbFilePath, JSON.stringify(Array.from(this.filePathToVector.entries())))
+				await this.saveVectorFile()
 				resolve(true)
 			}
 		})
 	}
 
-	private async saveVectorFile() {
+	private async saveVectorFile() { // todo debounce
 		const fileSystemAdapter = this.vault.adapter
 		await fileSystemAdapter.write(this.dbFilePath, JSON.stringify(Array.from(this.filePathToVector.entries())))
 	}
@@ -72,7 +79,7 @@ export class VectorStore {
 		return new Map(result)
 	}
 
-	getByFilename(filePath: string): Vector {
+	getByFilePath(filePath: string): Vector {
 		return this.filePathToVector.get(filePath) as Vector
 	}
 
@@ -100,41 +107,60 @@ export class VectorStore {
 		}
 	}
 
+	async addOrUpdateFile(userFile: TFile, createEmbedding: (fileText: string) => Promise<Vector | undefined>) {
+		const newVector = await this.getNewVector(userFile, createEmbedding)
+		if (newVector === undefined) {
+			console.warn(`Failed to add or update file to the database: ${userFile.name}`)
+		} else {
+			await this.updateVectorByFilename(userFile.path, newVector)
+		}
+	}
+
 	async updateVectorStore(userFiles: Array<TFile>, createEmbedding: (fileText: string) => Promise<Vector | undefined>) {
-		const newFilenameToVector: Map<string, Vector> = new Map()
-		const userMdFiles = userFiles.filter(file => file.extension === "md")
-		// batch calls to create embeddings so that it saves as it goes,
-		// and you don't have to start over if it doesn't finish
-		const batchedFiles = this.chunkArray(userMdFiles, 10)
-		for (const batchOfFiles of batchedFiles) {
-			let hasChanges = false
-			for (const userFile of batchOfFiles) {
-				if (this.getByFilename(userFile.path)) {
-					// todo implement below to compare hash
-					const fileHasChanged = false
-					if (fileHasChanged) {
-						const newVector = await this.getNewVector(userFile, createEmbedding)
-						if (newVector !== undefined) {
-							newFilenameToVector.set(userFile.path, newVector)
-							hasChanges = true
+		this.isIndexingComplete = new Promise(async (resolve) => {
+			const newFilePathToVector: Map<string, Vector> = new Map()
+			// create temp copy of the current filePathToVector map since we will overwrite this.filePathToVector as we go
+			const oldFilePathToVector: Map<string, Vector> = new Map(
+				JSON.parse(
+					JSON.stringify(Array.from(this.filePathToVector))
+				)
+			);
+			const userMdFiles = userFiles.filter(file => file.extension === 'md')
+			// batch calls to create embeddings so that it saves as it goes,
+			// and you don't have to start over if it doesn't finish
+			const batchedFiles: Array<Array<TFile>> = this.chunkArray(userMdFiles, 10)
+			for (const batchOfFiles of batchedFiles) {
+				let hasChanges = false
+				for (const userFile of batchOfFiles) {
+					if (oldFilePathToVector.get(userFile.path)) {
+						// todo implement below to compare hash
+						const fileHasChanged = false
+						if (fileHasChanged) {
+							const newVector = await this.getNewVector(userFile, createEmbedding)
+							if (newVector !== undefined) {
+								newFilePathToVector.set(userFile.path, newVector)
+								hasChanges = true
+							}
+						} else {
+							const existingVector = oldFilePathToVector.get(userFile.path)
+							newFilePathToVector.set(userFile.path, existingVector as Vector)
 						}
 					} else {
-						const existingVector = this.getByFilename(userFile.path)
-						newFilenameToVector.set(userFile.path, existingVector)
-					}
-				} else {
-					const newVector = await this.getNewVector(userFile, createEmbedding)
-					if (newVector !== undefined) {
-						newFilenameToVector.set(userFile.path, newVector)
-						hasChanges = true
+						const newVector = await this.getNewVector(userFile, createEmbedding)
+						if (newVector !== undefined) {
+							newFilePathToVector.set(userFile.path, newVector)
+							hasChanges = true
+						}
 					}
 				}
+				if (hasChanges) {
+					this.filePathToVector = newFilePathToVector
+					await this.saveVectorFile()
+				}
 			}
-			if (hasChanges) {
-				this.filePathToVector = newFilenameToVector
-				await this.saveVectorFile()
-			}
-		}
+			resolve(true)
+		})
+		return this.isIndexingComplete
 	}
 
 	private async getNewVector(userFile: TFile, createEmbedding: (fileText: string) => Promise<Vector | undefined>): Promise<Vector | undefined> {

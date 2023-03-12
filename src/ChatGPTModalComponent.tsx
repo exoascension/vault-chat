@@ -6,21 +6,29 @@ import { SearchResult } from "./main";
 
 interface Props {
 	openAIHandler: OpenAIHandler,
-	getSearchResultsFiles: Function
+	getSearchResultsFiles: Function,
+
+	isIndexingComplete: Promise<boolean>
 }
 export const ChatGPTModalComponent: React.FC<Props> = (props: Props) => {
-	const { openAIHandler, getSearchResultsFiles } = props;
+	const { openAIHandler, getSearchResultsFiles, isIndexingComplete } = props;
 	const [internalConversation, setInternalConversation] = useState<Array<ChatCompletionRequestMessage>>([])
 	const [renderedConversation, setRenderedConversation] = useState<Array<ChatCompletionRequestMessage>>([])
 	const [userMessage, setUserMessage] = useState('')
 	const [buttonDisabled, setButtonDisabled] = useState(true)
 	const [inputDisabled, setInputDisabled] = useState(false)
 	const [tokensUsedSoFar, setTokensUsedSoFar] = useState(0)
+	const [showIndexingBanner, setShowIndexingBanner] = useState(true)
+
+	isIndexingComplete.then(() => {
+		setShowIndexingBanner(false)
+	})
 	const userMessageOnChange = (e: { target: { value: React.SetStateAction<string>; }; }) => {
 		setButtonDisabled(e.target.value.length === 0)
 		setUserMessage(e.target.value)
 	}
 
+	// @ts-ignore
 	const handleKeyDown = (e) => {
 		if (e.key === 'Enter') {
 			onClickSubmit()
@@ -84,16 +92,23 @@ export const ChatGPTModalComponent: React.FC<Props> = (props: Props) => {
 				as context in the conversation. With that context, you can ask powerful
 				questions about the content in your own vault. Try it out!
 			</p>
+			{ showIndexingBanner && (
+				<p className={'chat-indexing-banner'}>
+					Your vault is still indexing! Until indexing is complete, your chat assistant will only
+					have partial context and results may be inaccurate. Indexing takes approximately 1 minute per
+					20 files in your vault.
+				</p>
+			)}
 			{renderedConversation.length > 0 && (
 				<div className={'chat-box'}>
-				{renderedConversation.map(message => (
-					<p><span className={`role-${message.role}`}>{message.role}:</span> {message.content}</p>
+				{renderedConversation.map((message, index) => (
+					<p key={index}><span className={`role-${message.role}`}>{message.role}:</span> {message.content}</p>
 				))}
 				</div>
 			)}
 			<div className={'chat-input-layout'}>
 				<input className={'chat-input-input'} type="text" name="user-message" value={userMessage} onChange={userMessageOnChange} onKeyDown={handleKeyDown} disabled={inputDisabled}/>
-				<button disabled={buttonDisabled} onClick={onClickSubmit}>Submit</button>
+				<button className={buttonDisabled ? 'button-disabled' : ''} disabled={buttonDisabled} onClick={onClickSubmit}>Submit</button>
 			</div>
 		</>
 	)
