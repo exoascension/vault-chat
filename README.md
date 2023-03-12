@@ -1,102 +1,20 @@
-# Obsidian Sample Plugin
+# Vault Chat - Obsidian Plugin
 
-This is a sample plugin for Obsidian (https://obsidian.md).
+This plugin utilizes [OpenAI](https://platform.openai.com/) to provide you with a chat bot trained on your vault. You can ask your questions and converse with your vault's chat assistant.
 
-This project uses Typescript to provide type checking and documentation.
-The repo depends on the latest plugin API (obsidian.d.ts) in Typescript Definition format, which contains TSDoc comments describing what it does.
+<img width="579" alt="Screen Shot 2023-03-11 at 9 27 58 AM" src="https://user-images.githubusercontent.com/3997573/224574052-6be713f7-efa9-4f32-b8dc-30a0a4143328.png">
 
-**Note:** The Obsidian API is still in early alpha and is subject to change at any time!
+## Usage
 
-This sample plugin demonstrates some of the basic functionality the plugin API can do.
-- Changes the default font color to red using `styles.css`.
-- Adds a ribbon icon, which shows a Notice when clicked.
-- Adds a command "Open Sample Modal" which opens a Modal.
-- Adds a plugin setting tab to the settings page.
-- Registers a global click event and output 'click' to the console.
-- Registers a global interval which logs 'setInterval' to the console.
+To use the plugin, you must have an [OpenAI](https://platform.openai.com/) account, create an API key, and enter the key in the plugin settings.
 
-## First time developing plugins?
+<img width="783" alt="Screen Shot 2023-03-12 at 3 17 07 PM" src="https://user-images.githubusercontent.com/3997573/224574241-886e4260-d591-4da1-bcad-402c6eb9b4c0.png">
 
-Quick starting guide for new plugin devs:
+When you first add the Vault Chat plugin, it will need to index your existing vault files for ChatGPT to use during your conversations. This can take time (est. 1 minute per 20 files in your vault). You can use Vault Chat during this time, but until indexing is complete your assistant will not have full context for your conversation.
 
-- Check if [someone already developed a plugin for what you want](https://obsidian.md/plugins)! There might be an existing plugin similar enough that you can partner up with.
-- Make a copy of this repo as a template with the "Use this template" button (login to GitHub if you don't see it).
-- Clone your repo to a local development folder. For convenience, you can place this folder in your `.obsidian/plugins/your-plugin-name` folder.
-- Install NodeJS, then run `npm i` in the command line under your repo folder.
-- Run `npm run dev` to compile your plugin from `main.ts` to `main.js`.
-- Make changes to `main.ts` (or create new `.ts` files). Those changes should be automatically compiled into `main.js`.
-- Reload Obsidian to load the new version of your plugin.
-- Enable plugin in settings window.
-- For updates to the Obsidian API run `npm update` in the command line under your repo folder.
+When you are ready, use the command palette to start your conversation with the command: `Vault Chat: ask ChatGPT`
+<img width="778" alt="Screen Shot 2023-03-12 at 3 19 03 PM" src="https://user-images.githubusercontent.com/3997573/224574331-f3e16d8b-a17b-483b-834f-14f795ad3029.png">
 
-## Releasing new releases
-
-- Update your `manifest.json` with your new version number, such as `1.0.1`, and the minimum Obsidian version required for your latest release.
-- Update your `versions.json` file with `"new-plugin-version": "minimum-obsidian-version"` so older versions of Obsidian can download an older version of your plugin that's compatible.
-- Create new GitHub release using your new version number as the "Tag version". Use the exact version number, don't include a prefix `v`. See here for an example: https://github.com/obsidianmd/obsidian-sample-plugin/releases
-- Upload the files `manifest.json`, `main.js`, `styles.css` as binary attachments. Note: The manifest.json file must be in two places, first the root path of your repository and also in the release.
-- Publish the release.
-
-> You can simplify the version bump process by running `npm version patch`, `npm version minor` or `npm version major` after updating `minAppVersion` manually in `manifest.json`.
-> The command will bump version in `manifest.json` and `package.json`, and add the entry for the new version to `versions.json`
-
-## Adding your plugin to the community plugin list
-
-- Check https://github.com/obsidianmd/obsidian-releases/blob/master/plugin-review.md
-- Publish an initial version.
-- Make sure you have a `README.md` file in the root of your repo.
-- Make a pull request at https://github.com/obsidianmd/obsidian-releases to add your plugin.
-
-## How to use
-You can utilize the Hot-Reload Obsidian plugin along with `npm run dev` to make a fast development workflow without cloning this repo into your plugin folder.
-
-### Initial Setup
-1. Install the Obsidian42-BRAT plugin to easily install unpublished Obsidian Plugins: obsidian://show-plugin?id=obsidian42-brat
-2. Open the Command Palette and run `BRAT: Add a beta plugin for testing`
-3. Enter `https://github.com/pjeby/hot-reload` and click "Add Plugin" to install the hot-reload plugin
-4. Enable the `Hot-Reload` plugin under Obsidian -> Preferences -> Community Plugins
-
-### Dev Workflow
-1. Set `VAULT_PATH` to the directory of your Obsidian Vault:
-   `export VAULT_PATH="<vault path>"`
-- Clone this repo.
-- `npm i` or `yarn` to install dependencies
-- `npm run dev` to start compilation in watch mode.  Changes will automatically reload in Obsidian.
-
-## Improve code quality with eslint (optional)
-- [ESLint](https://eslint.org/) is a tool that analyzes your code to quickly find problems. You can run ESLint against your plugin to find common bugs and ways to improve your code. 
-- To use eslint with this project, make sure to install eslint from terminal:
-  - `npm install -g eslint`
-- To use eslint to analyze this project use this command:
-  - `eslint main.ts`
-  - eslint will then create a report with suggestions for code improvement by file and line number.
-- If your source code is in a folder, such as `src`, you can use eslint with this command to analyze all files in that folder:
-  - `eslint .\src\`
-
-## Funding URL
-
-You can include funding URLs where people who use your plugin can financially support it.
-
-The simple way is to set the `fundingUrl` field to your link in your `manifest.json` file:
-
-```json
-{
-    "fundingUrl": "https://buymeacoffee.com"
-}
-```
-
-If you have multiple URLs, you can also do:
-
-```json
-{
-    "fundingUrl": {
-        "Buy Me a Coffee": "https://buymeacoffee.com",
-        "GitHub Sponsor": "https://github.com/sponsors",
-        "Patreon": "https://www.patreon.com/"
-    }
-}
-```
-
-## API Documentation
-
-See https://github.com/obsidianmd/obsidian-api
+## Contact Us
+Questions? Issues? Feature request?
+Utilize Github issues.
