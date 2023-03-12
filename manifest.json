@@ -1,11 +1,9 @@
 {
-	"id": "obsidian-sample-plugin",
-	"name": "Sample Plugin",
+	"id": "vault-chat",
+	"name": "Vault Chat",
 	"version": "1.0.0",
 	"minAppVersion": "0.15.0",
-	"description": "This is a sample plugin for Obsidian. This plugin demonstrates some of the capabilities of the Obsidian API.",
-	"author": "Obsidian",
-	"authorUrl": "https://obsidian.md",
-	"fundingUrl": "https://obsidian.md/pricing",
-	"isDesktopOnly": false
+	"description": "A ChatGPT bot trained on your vault notes. Ask your AI questions about your own thoughts and ideas!",
+	"author": "Exo Ascension",
+	"isDesktopOnly": true
 }
