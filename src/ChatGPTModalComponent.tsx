@@ -21,7 +21,7 @@ export const ChatGPTModalComponent: React.FC<Props> = (props: Props) => {
 	const [showIndexingBanner, setShowIndexingBanner] = useState(true)
 
 	isIndexingComplete.then(() => {
-		setShowIndexingBanner(false)
+		if (showIndexingBanner) setShowIndexingBanner(false)
 	})
 	const userMessageOnChange = (e: { target: { value: React.SetStateAction<string>; }; }) => {
 		setButtonDisabled(e.target.value.length === 0)
