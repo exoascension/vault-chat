@@ -42,7 +42,7 @@ const context = await esbuild.context({
 	outfile: "main.js",
 	plugins: [copyStaticFiles({
 		src: './',
-		dest: vaultFolder + "/.obsidian/plugins/obsidian-semantic-search",
+		dest: vaultFolder + "/.obsidian/plugins/vault-chat",
 		dereference: true,
 		errorOnExist: false,
 		force: true,

@@ -1,14 +1,14 @@
 import { App, PluginSettingTab, Setting, SliderComponent } from 'obsidian'
-import SemanticSearch from './main'
+import VaultChat from './main'
 
-export interface SemanticSearchSettings {
+export interface VaultChatSettings {
 	apiKey: string;
 	relevanceThreshold: number;
 }
 
-export class SemanticSearchSettingTab extends PluginSettingTab {
-	plugin: SemanticSearch;
-	constructor(app: App, plugin: SemanticSearch) {
+export class VaultChatSettingTab extends PluginSettingTab {
+	plugin: VaultChat;
+	constructor(app: App, plugin: VaultChat) {
 		super(app, plugin);
 		this.plugin = plugin;
 	}
@@ -18,11 +18,11 @@ export class SemanticSearchSettingTab extends PluginSettingTab {
 
 		containerEl.empty();
 
-		containerEl.createEl('h2', {text: 'Semantic Search Settings.'});
+		containerEl.createEl('h2', {text: 'Vault Chat Settings'});
 
 		new Setting(containerEl)
 			.setName('API key')
-			.setDesc('In order to use semantic search, you need to register an OpenAI account and create a new API key on their website')
+			.setDesc('In order to use Vault Chat, you need to register an OpenAI account and create a new API key on their website')
 			.addText(text => text
 				.setPlaceholder('Enter your API key')
 				.setValue(this.plugin.settings.apiKey)
@@ -30,20 +30,5 @@ export class SemanticSearchSettingTab extends PluginSettingTab {
 					this.plugin.settings.apiKey = value;
 					await this.plugin.saveSettings();
 				}));
-
-		new Setting(containerEl)
-			.setName('Relevance threshold')
-			.setDesc('Sets the threshold for determining if a search result is relevant. A higher value means the search will only return more closely related results')
-			.addSlider((slider: SliderComponent) => {
-				slider
-					.setLimits(0, 1, 0.01)
-					.setValue(this.plugin.settings.relevanceThreshold)
-					.setDynamicTooltip()
-					.onChange(async (value) => {
-						this.plugin.settings.relevanceThreshold = value
-						await this.plugin.saveSettings()
-					})
-				}	
-			)
 	}
 }

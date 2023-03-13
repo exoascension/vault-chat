@@ -1,12 +1,12 @@
 import {App, Modal} from "obsidian";
-import SemanticSearch from "./main";
+import VaultChat from "./main";
 import * as React from "react";
 import {createRoot, Root} from "react-dom/client";
 import {ChatGPTModalComponent} from "./ChatGPTModalComponent";
 import {OpenAIHandler} from "./OpenAIHandler";
 
 export class ChatGPTModal extends Modal {
-	plugin: SemanticSearch;
+	plugin: VaultChat;
 	myRoot: Root | undefined;
 
 	openAIHandler: OpenAIHandler;
@@ -14,7 +14,7 @@ export class ChatGPTModal extends Modal {
 
 	isIndexingComplete: Promise<boolean>
 
-	constructor(app: App, plugin: SemanticSearch, openAIHandler: OpenAIHandler, getSearchResultsFiles: Function, isIndexingComplete: Promise<boolean>) {
+	constructor(app: App, plugin: VaultChat, openAIHandler: OpenAIHandler, getSearchResultsFiles: Function, isIndexingComplete: Promise<boolean>) {
 		super(app);
 		this.plugin = plugin;
 		this.openAIHandler = openAIHandler;
