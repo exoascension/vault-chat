@@ -13,7 +13,7 @@ export class VectorStore {
 
 	private vault: Vault
 	private dbFileName = "database2.json"
-	private dbFilePath = `.obsidian/plugins/obsidian-semantic-search/${this.dbFileName}`
+	private dbFilePath = `.obsidian/plugins/vault-chat/${this.dbFileName}`
 
 	private filePathToVector: Map<string, Vector>;
 	isReady: Promise<boolean>;

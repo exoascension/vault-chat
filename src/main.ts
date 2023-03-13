@@ -1,11 +1,11 @@
 import { Plugin, TFile} from 'obsidian';
 import { VectorStore } from "./VectorStore";
 import { OpenAIHandler } from "./OpenAIHandler"
-import { SemanticSearchSettingTab, SemanticSearchSettings } from './UserSettings';
+import { VaultChatSettingTab, VaultChatSettings } from './UserSettings';
 import { debounce } from 'obsidian'
 import {ChatGPTModal} from "./ChatGPTModal";
 
-const DEFAULT_SETTINGS: SemanticSearchSettings = {
+const DEFAULT_SETTINGS: VaultChatSettings = {
 	apiKey: 'OpenAI API key goes here',
 	relevanceThreshold: 0.01
 }
@@ -14,8 +14,8 @@ export type SearchResult = {
 	name: string;
 	contents: string;
 }
-export default class SemanticSearch extends Plugin {
-	settings: SemanticSearchSettings;
+export default class VaultChat extends Plugin {
+	settings: VaultChatSettings;
 
 	viewActivated: boolean;
 
@@ -80,7 +80,7 @@ export default class SemanticSearch extends Plugin {
 		})
 
 		// This adds a settings tab so the user can configure various aspects of the plugin
-		this.addSettingTab(new SemanticSearchSettingTab(this.app, this));
+		this.addSettingTab(new VaultChatSettingTab(this.app, this));
 	}
 
 	onunload() {
