@@ -21,7 +21,7 @@ export default class VaultChat extends Plugin {
 
 	searchTerm: string;
 
-	searchActive: boolean = false;
+	searchActive = false;
 
 	vectorStore: VectorStore;
 
@@ -29,7 +29,7 @@ export default class VaultChat extends Plugin {
 
 	waitingForApiKey: boolean;
 
-	pluginInitialized: boolean = false;
+	pluginInitialized = false;
 
 	async onload() {
 		await this.loadSettings();
@@ -140,7 +140,7 @@ export default class VaultChat extends Plugin {
 			if (fileContents.length > 1000) {
 				fileContents = `${fileContents.substring(0, 1000)}...`
 			}
-			const fileName = searchResult.split('/').last()!!
+			const fileName = searchResult.split('/').last()!
 			hydratedResults.push({
 				name: fileName,
 				contents: fileContents,
