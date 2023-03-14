@@ -1,20 +1,20 @@
 import {App, Modal} from "obsidian";
-import VaultChat from "./main";
+import VaultChat, {SearchResult} from "./main";
 import * as React from "react";
 import {createRoot, Root} from "react-dom/client";
-import {ChatGPTModalComponent} from "./ChatGPTModalComponent";
+import {ChatGPTModalComponent} from "./components/ChatGPTModalComponent";
 import {OpenAIHandler} from "./OpenAIHandler";
 
-export class ChatGPTModal extends Modal {
+export class AskChatGPTModal extends Modal {
 	plugin: VaultChat;
 	myRoot: Root | undefined;
 
 	openAIHandler: OpenAIHandler;
-	getSearchResultsFiles: Function;
+	getSearchResultsFiles: (searchTerm: string) => Promise<Array<SearchResult>>;
 
 	isIndexingComplete: Promise<boolean>
 
-	constructor(app: App, plugin: VaultChat, openAIHandler: OpenAIHandler, getSearchResultsFiles: Function, isIndexingComplete: Promise<boolean>) {
+	constructor(app: App, plugin: VaultChat, openAIHandler: OpenAIHandler, getSearchResultsFiles: (searchTerm: string) => Promise<Array<SearchResult>>, isIndexingComplete: Promise<boolean>) {
 		super(app);
 		this.plugin = plugin;
 		this.openAIHandler = openAIHandler;
