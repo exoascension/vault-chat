@@ -35,13 +35,13 @@ export default class VaultChat extends Plugin {
 		// This adds a settings tab so the user can configure various aspects of the plugin
 		this.addSettingTab(new VaultChatSettingTab(this.app, this));
 
-		this.waitingForApiKey = !this.apiKeyIsValid()
-
-		if (this.waitingForApiKey) {
+		if (this.apiKeyIsValid()) {
+			this.waitingForApiKey = false
+			this.initializePlugin()
+		} else {
+			this.waitingForApiKey = true
 			console.warn('Vault Chat plugin requires you to set your OpenAI API key in the plugin settings, ' +
 				'but it appears you have not set one. Until you do, Vault Chat plugin will remain inactive.')
-		} else {
-			this.initializePlugin()
 		}
 	}
 
