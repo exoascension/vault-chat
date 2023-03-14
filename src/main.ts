@@ -25,11 +25,41 @@ export default class VaultChat extends Plugin {
 
 	vectorStore: VectorStore;
 
-	openAIHandler: OpenAIHandler
+	openAIHandler: OpenAIHandler;
+
+	waitingForApiKey: boolean;
+
+	pluginInitialized: boolean = false;
 
 	async onload() {
 		await this.loadSettings();
 
+		// This adds a settings tab so the user can configure various aspects of the plugin
+		this.addSettingTab(new VaultChatSettingTab(this.app, this));
+
+		this.waitingForApiKey = !this.apiKeyIsValid()
+
+		if (this.waitingForApiKey) {
+			this.waitingForApiKey = true;
+			console.warn('Vault Chat plugin requires you to set your OpenAI API key in the plugin settings, ' +
+				'but it appears you have not set one. Until you do, Vault Chat plugin will remain inactive.')
+		} else {
+			this.initializePlugin()
+		}
+	}
+
+	onunload() {
+	}
+
+	apiKeyIsValid() {
+		return this.settings.apiKey
+			&& this.settings.apiKey !== ''
+			&& this.settings.apiKey !== DEFAULT_SETTINGS.apiKey
+			&& this.settings.apiKey.length > 30
+	}
+
+	initializePlugin() {
+		if (this.pluginInitialized) return
 		this.openAIHandler = new OpenAIHandler(this.settings.apiKey)
 		this.vectorStore = new VectorStore(this.app.vault)
 		this.vectorStore.isReady.then(async () => {
@@ -78,12 +108,6 @@ export default class VaultChat extends Plugin {
 				}
 			}));
 		})
-
-		// This adds a settings tab so the user can configure various aspects of the plugin
-		this.addSettingTab(new VaultChatSettingTab(this.app, this));
-	}
-
-	onunload() {
 	}
 
 	async searchForTerm(searchTerm: string): Promise<Array<string>> {
@@ -131,5 +155,8 @@ export default class VaultChat extends Plugin {
 
 	async saveSettings() {
 		await this.saveData(this.settings);
+		if (this.waitingForApiKey && this.apiKeyIsValid()) {
+			this.initializePlugin()
+		}
 	}
 }
