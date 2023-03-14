@@ -2,10 +2,10 @@ import {App, Modal} from "obsidian";
 import VaultChat, {SearchResult} from "./main";
 import * as React from "react";
 import {createRoot, Root} from "react-dom/client";
-import {ChatGPTModalComponent} from "./ChatModal/ChatGPTModalComponent";
+import {ChatGPTModalComponent} from "./components/ChatGPTModalComponent";
 import {OpenAIHandler} from "./OpenAIHandler";
 
-export class ChatGPTModal extends Modal {
+export class AskChatGPTModal extends Modal {
 	plugin: VaultChat;
 	myRoot: Root | undefined;
 

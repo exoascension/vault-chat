@@ -45,7 +45,8 @@ export const ChatGPTModalComponent: React.FC<Props> = (props: Props) => {
 	const onClickSubmit = async () => {
 		setButtonDisabled(true)
 		// new conversation request will use the internalConversation so the assistant has all necessary history
-		const newInternalConversation: Array<ChatCompletionRequestMessage> = Object.assign([], internalConversation);const searchResults = await getSearchResultsFiles(userMessage)
+		const newInternalConversation: Array<ChatCompletionRequestMessage> = Object.assign([], internalConversation);
+		const searchResults = await getSearchResultsFiles(userMessage)
 
 		const systemMessageForContext: ChatCompletionRequestMessage = {
 			role: 'system',
