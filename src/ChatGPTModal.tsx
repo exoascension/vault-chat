@@ -52,7 +52,7 @@ export class ChatGPTModal extends Modal {
 
 	async appendToActiveNote(text: string) {
 		const currentVal = this.app.workspace.activeEditor?.editor?.getValue()
-		this.app.workspace.activeEditor?.editor?.setValue(`${currentVal} \n\n ${text}`)
+		this.app.workspace.activeEditor?.editor?.setValue(`${currentVal}\n\n${text}`)
 		this.app.workspace.activeEditor?.editor?.scrollTo(this.app.workspace.activeEditor?.editor?.lastLine())
 		this.app.workspace.activeEditor?.editor?.focus()
 		this.close()
