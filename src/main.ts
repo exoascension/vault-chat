@@ -29,8 +29,6 @@ export default class VaultChat extends Plugin {
 
 	waitingForApiKey: boolean;
 
-	pluginInitialized = false;
-
 	async onload() {
 		await this.loadSettings();
 
@@ -40,7 +38,6 @@ export default class VaultChat extends Plugin {
 		this.waitingForApiKey = !this.apiKeyIsValid()
 
 		if (this.waitingForApiKey) {
-			this.waitingForApiKey = true;
 			console.warn('Vault Chat plugin requires you to set your OpenAI API key in the plugin settings, ' +
 				'but it appears you have not set one. Until you do, Vault Chat plugin will remain inactive.')
 		} else {
@@ -59,7 +56,6 @@ export default class VaultChat extends Plugin {
 	}
 
 	initializePlugin() {
-		if (this.pluginInitialized) return
 		this.openAIHandler = new OpenAIHandler(this.settings.apiKey)
 		this.vectorStore = new VectorStore(this.app.vault)
 		this.vectorStore.isReady.then(async () => {
@@ -156,6 +152,7 @@ export default class VaultChat extends Plugin {
 	async saveSettings() {
 		await this.saveData(this.settings);
 		if (this.waitingForApiKey && this.apiKeyIsValid()) {
+			this.waitingForApiKey = false
 			this.initializePlugin()
 		}
 	}
