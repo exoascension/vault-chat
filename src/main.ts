@@ -21,15 +21,41 @@ export default class VaultChat extends Plugin {
 
 	searchTerm: string;
 
-	searchActive: boolean = false;
+	searchActive = false;
 
 	vectorStore: VectorStore;
 
-	openAIHandler: OpenAIHandler
+	openAIHandler: OpenAIHandler;
+
+	waitingForApiKey: boolean;
 
 	async onload() {
 		await this.loadSettings();
 
+		// This adds a settings tab so the user can configure various aspects of the plugin
+		this.addSettingTab(new VaultChatSettingTab(this.app, this));
+
+		if (this.apiKeyIsValid()) {
+			this.waitingForApiKey = false
+			this.initializePlugin()
+		} else {
+			this.waitingForApiKey = true
+			console.warn('Vault Chat plugin requires you to set your OpenAI API key in the plugin settings, ' +
+				'but it appears you have not set one. Until you do, Vault Chat plugin will remain inactive.')
+		}
+	}
+
+	onunload() {
+	}
+
+	apiKeyIsValid() {
+		return this.settings.apiKey
+			&& this.settings.apiKey !== ''
+			&& this.settings.apiKey !== DEFAULT_SETTINGS.apiKey
+			&& this.settings.apiKey.length > 30
+	}
+
+	initializePlugin() {
 		this.openAIHandler = new OpenAIHandler(this.settings.apiKey)
 		this.vectorStore = new VectorStore(this.app.vault)
 		this.vectorStore.isReady.then(async () => {
@@ -78,12 +104,6 @@ export default class VaultChat extends Plugin {
 				}
 			}));
 		})
-
-		// This adds a settings tab so the user can configure various aspects of the plugin
-		this.addSettingTab(new VaultChatSettingTab(this.app, this));
-	}
-
-	onunload() {
 	}
 
 	async searchForTerm(searchTerm: string): Promise<Array<string>> {
@@ -116,7 +136,7 @@ export default class VaultChat extends Plugin {
 			if (fileContents.length > 1000) {
 				fileContents = `${fileContents.substring(0, 1000)}...`
 			}
-			const fileName = searchResult.split('/').last()!!
+			const fileName = searchResult.split('/').last()!
 			hydratedResults.push({
 				name: fileName,
 				contents: fileContents,
@@ -131,5 +151,9 @@ export default class VaultChat extends Plugin {
 
 	async saveSettings() {
 		await this.saveData(this.settings);
+		if (this.waitingForApiKey && this.apiKeyIsValid()) {
+			this.waitingForApiKey = false
+			this.initializePlugin()
+		}
 	}
 }
