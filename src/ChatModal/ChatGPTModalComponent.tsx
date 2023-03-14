@@ -1,18 +1,21 @@
 import * as React from "react";
 import { useState } from "react";
-import { OpenAIHandler } from "./OpenAIHandler";
+import { OpenAIHandler } from "../OpenAIHandler";
 import { ChatCompletionRequestMessage } from "openai/api";
-import { SearchResult } from "./main";
+import { SearchResult } from "../main";
+import {SaveOptions} from "./SaveOptions";
+import {ChatGPTConversation} from "./ChatGPTConversation";
+import {IndexingNotification} from "./IndexingNotification";
 
 interface Props {
 	openAIHandler: OpenAIHandler,
-	getSearchResultsFiles: Function,
+	getSearchResultsFiles: (searchTerm: string) => Promise<Array<SearchResult>>,
 
 	isIndexingComplete: Promise<boolean>,
 
-	saveToAndOpenNewNote: Function,
+	saveToAndOpenNewNote: (text: string) => never,
 
-	appendToActiveNote: Function
+	appendToActiveNote: (text: string) => never
 }
 export const ChatGPTModalComponent: React.FC<Props> = (props: Props) => {
 	const { openAIHandler, getSearchResultsFiles, isIndexingComplete, saveToAndOpenNewNote, appendToActiveNote } = props;
@@ -23,7 +26,6 @@ export const ChatGPTModalComponent: React.FC<Props> = (props: Props) => {
 	const [inputDisabled, setInputDisabled] = useState(false)
 	const [tokensUsedSoFar, setTokensUsedSoFar] = useState(0)
 	const [showIndexingBanner, setShowIndexingBanner] = useState(true)
-	const [showSaveOptions, setShowSaveOptions] = useState(false)
 
 	isIndexingComplete.then(() => {
 		if (showIndexingBanner) setShowIndexingBanner(false)
@@ -38,22 +40,6 @@ export const ChatGPTModalComponent: React.FC<Props> = (props: Props) => {
 		if (e.key === 'Enter') {
 			onClickSubmit()
 		}
-	}
-
-	const formatText = () => {
-		return renderedConversation.map(message => `${message.role}: ${message.content}`).join(`\n`)
-	}
-
-	const onClickCopy = () => {
-		navigator.clipboard.writeText(formatText())
-	}
-
-	const onClickNewNote = () => {
-		saveToAndOpenNewNote(formatText())
-	}
-
-	const onClickAppendNote = () => {
-		appendToActiveNote(formatText())
 	}
 
 	const onClickSubmit = async () => {
@@ -115,31 +101,18 @@ export const ChatGPTModalComponent: React.FC<Props> = (props: Props) => {
 				questions about the content in your own vault. Try it out!
 			</p>
 			{ showIndexingBanner && (
-				<p className={'chat-indexing-banner'}>
-					Your vault is still indexing! Until indexing is complete, your chat assistant will only
-					have partial context and results may be inaccurate. Indexing takes approximately 1 minute per
-					20 files in your vault.
-				</p>
+				<IndexingNotification/>
 			)}
-			{renderedConversation.length > 0 && (
-				<div className={'chat-box'}>
-				{renderedConversation.map((message, index) => (
-					<p key={index}><span className={`role-${message.role}`}>{message.role}:</span> {message.content}</p>
-				))}
-				</div>
-			)}
+			<ChatGPTConversation conversation={renderedConversation}/>
 			<div className={'chat-input-layout'}>
 				<input className={'chat-input-input'} type="text" name="user-message" value={userMessage} onChange={userMessageOnChange} onKeyDown={handleKeyDown} disabled={inputDisabled}/>
 				<button className={buttonDisabled ? 'button-disabled' : ''} disabled={buttonDisabled} onClick={onClickSubmit}>Submit</button>
 			</div>
-			<p onClick={() => setShowSaveOptions(prev => !prev)}>{showSaveOptions ? '-' : '+'} Save options</p>
-			{ showSaveOptions && (
-				<div className={"save-options-panel"}>
-					<button onClick={onClickCopy}>Copy</button>
-					<button onClick={onClickNewNote}>New note</button>
-					<button onClick={onClickAppendNote}>Append to note</button>
-				</div>
-			)}
+			<SaveOptions
+				conversation={renderedConversation}
+				saveToAndOpenNewNote={saveToAndOpenNewNote}
+				appendToActiveNote={appendToActiveNote}
+			/>
 		</>
 	)
 }
