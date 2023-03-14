@@ -29,6 +29,8 @@ export class ChatGPTModal extends Modal {
 				openAIHandler={this.openAIHandler}
 				getSearchResultsFiles={this.getSearchResultsFiles}
 				isIndexingComplete={this.isIndexingComplete}
+				saveToAndOpenNewNote={this.saveToAndOpenNewNote.bind(this)}
+				appendToActiveNote={this.appendToActiveNote.bind(this)}
 			/>
 		)
 	}
@@ -37,6 +39,23 @@ export class ChatGPTModal extends Modal {
 		const { contentEl } = this;
 		if (this.myRoot) this.myRoot.unmount()
 		contentEl.empty();
+	}
+
+	async saveToAndOpenNewNote(text: string) {
+		const noteRandomId = Math.floor(Math.random() * (100000 - 1) + 1);
+		const newNote = await this.app.vault.create(`/vaultchat-${noteRandomId}.md`, text)
+		await this.app.workspace.getLeaf().openFile(newNote)
+		this.app.workspace.activeEditor?.editor?.scrollTo(this.app.workspace.activeEditor?.editor?.lastLine())
+		this.app.workspace.activeEditor?.editor?.focus()
+		this.close()
+	}
+
+	async appendToActiveNote(text: string) {
+		const currentVal = this.app.workspace.activeEditor?.editor?.getValue()
+		this.app.workspace.activeEditor?.editor?.setValue(`${currentVal}\n\n${text}`)
+		this.app.workspace.activeEditor?.editor?.scrollTo(this.app.workspace.activeEditor?.editor?.lastLine())
+		this.app.workspace.activeEditor?.editor?.focus()
+		this.close()
 	}
 }
 

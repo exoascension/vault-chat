@@ -8,10 +8,14 @@ interface Props {
 	openAIHandler: OpenAIHandler,
 	getSearchResultsFiles: Function,
 
-	isIndexingComplete: Promise<boolean>
+	isIndexingComplete: Promise<boolean>,
+
+	saveToAndOpenNewNote: Function,
+
+	appendToActiveNote: Function
 }
 export const ChatGPTModalComponent: React.FC<Props> = (props: Props) => {
-	const { openAIHandler, getSearchResultsFiles, isIndexingComplete } = props;
+	const { openAIHandler, getSearchResultsFiles, isIndexingComplete, saveToAndOpenNewNote, appendToActiveNote } = props;
 	const [internalConversation, setInternalConversation] = useState<Array<ChatCompletionRequestMessage>>([])
 	const [renderedConversation, setRenderedConversation] = useState<Array<ChatCompletionRequestMessage>>([])
 	const [userMessage, setUserMessage] = useState('')
@@ -19,6 +23,7 @@ export const ChatGPTModalComponent: React.FC<Props> = (props: Props) => {
 	const [inputDisabled, setInputDisabled] = useState(false)
 	const [tokensUsedSoFar, setTokensUsedSoFar] = useState(0)
 	const [showIndexingBanner, setShowIndexingBanner] = useState(true)
+	const [showSaveOptions, setShowSaveOptions] = useState(false)
 
 	isIndexingComplete.then(() => {
 		if (showIndexingBanner) setShowIndexingBanner(false)
@@ -34,6 +39,23 @@ export const ChatGPTModalComponent: React.FC<Props> = (props: Props) => {
 			onClickSubmit()
 		}
 	}
+
+	const formatText = () => {
+		return renderedConversation.map(message => `${message.role}: ${message.content}`).join(`\n`)
+	}
+
+	const onClickCopy = () => {
+		navigator.clipboard.writeText(formatText())
+	}
+
+	const onClickNewNote = () => {
+		saveToAndOpenNewNote(formatText())
+	}
+
+	const onClickAppendNote = () => {
+		appendToActiveNote(formatText())
+	}
+
 	const onClickSubmit = async () => {
 		setButtonDisabled(true)
 		// new conversation request will use the internalConversation so the assistant has all necessary history
@@ -110,6 +132,14 @@ export const ChatGPTModalComponent: React.FC<Props> = (props: Props) => {
 				<input className={'chat-input-input'} type="text" name="user-message" value={userMessage} onChange={userMessageOnChange} onKeyDown={handleKeyDown} disabled={inputDisabled}/>
 				<button className={buttonDisabled ? 'button-disabled' : ''} disabled={buttonDisabled} onClick={onClickSubmit}>Submit</button>
 			</div>
+			<p onClick={() => setShowSaveOptions(prev => !prev)}>{showSaveOptions ? '-' : '+'} Save options</p>
+			{ showSaveOptions && (
+				<div className={"save-options-panel"}>
+					<button onClick={onClickCopy}>Copy</button>
+					<button onClick={onClickNewNote}>New note</button>
+					<button onClick={onClickAppendNote}>Append to note</button>
+				</div>
+			)}
 		</>
 	)
 }
