@@ -25,7 +25,7 @@ export const SummarizeNoteModalComponent: React.FC<Props> = (props: Props) => {
 			const requestMessages: Array<ChatCompletionRequestMessage> = []
 			requestMessages.push({
 				role: 'user',
-				content: `Please summarize this note, which is titled "${fileName}": "${fileContents.substring(0,3000)}`
+				content: `Please summarize this note, which is titled "${fileName}": "${fileContents.substring(0,3000)}"`
 			})
 			const response = await openAIHandler.createChatCompletion(requestMessages)
 			const summaryMessage = response.choices.first()?.message
