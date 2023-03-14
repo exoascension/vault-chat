@@ -1,6 +1,6 @@
 ### How to deploy
 1. Pull the latest changes: `git pull origin main`
-1. Make a branch `git checkout release-<version>`
+1. Make a branch `git checkout -b release-<version>`
 1. Update the version in the `package.json` and `manifest.json`
 1. Commit the version changes, open and merge PR.
 1. On `main` branch with latest changes, create and push a tag:
