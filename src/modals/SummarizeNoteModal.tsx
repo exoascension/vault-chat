@@ -1,36 +1,37 @@
 import {App, Modal} from "obsidian";
-import VaultChat, {SearchResult} from "./main";
+import VaultChat from "../main";
 import * as React from "react";
 import {createRoot, Root} from "react-dom/client";
-import {ChatGPTModalComponent} from "./components/ChatGPTModalComponent";
-import {OpenAIHandler} from "./OpenAIHandler";
+import {OpenAIHandler} from "../OpenAIHandler";
+import {SummarizeNoteModalComponent} from "../components/SummarizeNoteModalComponent";
 
-export class AskChatGPTModal extends Modal {
+export class SummarizeNoteModal extends Modal {
 	plugin: VaultChat;
 	myRoot: Root | undefined;
 
 	openAIHandler: OpenAIHandler;
-	getSearchResultsFiles: (searchTerm: string) => Promise<Array<SearchResult>>;
 
-	isIndexingComplete: Promise<boolean>
+	fileName: string;
 
-	constructor(app: App, plugin: VaultChat, openAIHandler: OpenAIHandler, getSearchResultsFiles: (searchTerm: string) => Promise<Array<SearchResult>>, isIndexingComplete: Promise<boolean>) {
+	fileContents: string;
+
+	constructor(app: App, plugin: VaultChat, openAIHandler: OpenAIHandler, fileName: string, fileContents: string) {
 		super(app);
 		this.plugin = plugin;
 		this.openAIHandler = openAIHandler;
-		this.getSearchResultsFiles = getSearchResultsFiles;
-		this.isIndexingComplete = isIndexingComplete;
+		this.fileName = fileName
+		this.fileContents = fileContents
 	}
 
 	onOpen() {
 		this.myRoot = createRoot(this.contentEl)
 		this.myRoot.render(
-			<ChatGPTModalComponent
+			<SummarizeNoteModalComponent
 				openAIHandler={this.openAIHandler}
-				getSearchResultsFiles={this.getSearchResultsFiles}
-				isIndexingComplete={this.isIndexingComplete}
 				saveToAndOpenNewNote={this.saveToAndOpenNewNote.bind(this)}
 				appendToActiveNote={this.appendToActiveNote.bind(this)}
+				fileName={this.fileName}
+				fileContents={this.fileContents}
 			/>
 		)
 	}
@@ -52,7 +53,7 @@ export class AskChatGPTModal extends Modal {
 
 	async appendToActiveNote(text: string) {
 		const currentVal = this.app.workspace.activeEditor?.editor?.getValue()
-		this.app.workspace.activeEditor?.editor?.setValue(`${currentVal}\n\n${text}`)
+		this.app.workspace.activeEditor?.editor?.setValue(`${currentVal} \n\n ${text}`)
 		this.app.workspace.activeEditor?.editor?.scrollTo(this.app.workspace.activeEditor?.editor?.lastLine())
 		this.app.workspace.activeEditor?.editor?.focus()
 		this.close()

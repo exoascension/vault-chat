@@ -3,8 +3,9 @@ import { VectorStore } from "./VectorStore";
 import { OpenAIHandler } from "./OpenAIHandler"
 import { VaultChatSettingTab, VaultChatSettings } from './UserSettings';
 import { debounce } from 'obsidian'
-import {AskChatGPTModal} from "./AskChatGPTModal";
-import {SummarizeNoteModal} from "./SummarizeNoteModal";
+import {AskChatGPTModal} from "./modals/AskChatGPTModal";
+import {SummarizeNoteModal} from "./modals/SummarizeNoteModal";
+import {SemanticSearchModal} from "./modals/SemanticSearchModal";
 
 const DEFAULT_SETTINGS: VaultChatSettings = {
 	apiKey: 'OpenAI API key goes here',
@@ -14,6 +15,8 @@ const DEFAULT_SETTINGS: VaultChatSettings = {
 export type SearchResult = {
 	name: string;
 	contents: string;
+
+	abstractFile: TFile;
 }
 export default class VaultChat extends Plugin {
 	settings: VaultChatSettings;
@@ -80,6 +83,13 @@ export default class VaultChat extends Plugin {
 						const fileContents = await this.app.vault.read(activeFile)
 						new SummarizeNoteModal(this.app, this, this.openAIHandler, fileName, fileContents).open();
 					}
+				}
+			});
+			this.addCommand({
+				id: 'semantic-search',
+				name: 'Semantic Search',
+				callback: () => {
+					new SemanticSearchModal(this.app, this, this.openAIHandler, this.getSearchResultsFiles.bind(this), indexingPromise).open();
 				}
 			});
 			this.registerEvent(this.app.vault.on('create', async (file) => {
@@ -153,6 +163,7 @@ export default class VaultChat extends Plugin {
 			hydratedResults.push({
 				name: fileName,
 				contents: fileContents,
+				abstractFile: abstractFile
 			})
 		}
 		return hydratedResults

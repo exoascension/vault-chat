@@ -1,37 +1,36 @@
 import {App, Modal} from "obsidian";
-import VaultChat from "./main";
+import VaultChat, {SearchResult} from "../main";
 import * as React from "react";
 import {createRoot, Root} from "react-dom/client";
-import {OpenAIHandler} from "./OpenAIHandler";
-import {SummarizeNoteModalComponent} from "./components/SummarizeNoteModalComponent";
+import {ChatGPTModalComponent} from "../components/ChatGPTModalComponent";
+import {OpenAIHandler} from "../OpenAIHandler";
+import {SemanticSearchModalComponent} from "../components/SemanticSearchModalComponent";
 
-export class SummarizeNoteModal extends Modal {
+export class SemanticSearchModal extends Modal {
 	plugin: VaultChat;
 	myRoot: Root | undefined;
 
 	openAIHandler: OpenAIHandler;
+	getSearchResultsFiles: (searchTerm: string) => Promise<Array<SearchResult>>;
 
-	fileName: string;
+	isIndexingComplete: Promise<boolean>;
 
-	fileContents: string;
-
-	constructor(app: App, plugin: VaultChat, openAIHandler: OpenAIHandler, fileName: string, fileContents: string) {
+	constructor(app: App, plugin: VaultChat, openAIHandler: OpenAIHandler, getSearchResultsFiles: (searchTerm: string) => Promise<Array<SearchResult>>, isIndexingComplete: Promise<boolean>) {
 		super(app);
 		this.plugin = plugin;
 		this.openAIHandler = openAIHandler;
-		this.fileName = fileName
-		this.fileContents = fileContents
+		this.getSearchResultsFiles = getSearchResultsFiles;
+		this.isIndexingComplete = isIndexingComplete;
 	}
 
 	onOpen() {
 		this.myRoot = createRoot(this.contentEl)
 		this.myRoot.render(
-			<SummarizeNoteModalComponent
+			<SemanticSearchModalComponent
 				openAIHandler={this.openAIHandler}
-				saveToAndOpenNewNote={this.saveToAndOpenNewNote.bind(this)}
-				appendToActiveNote={this.appendToActiveNote.bind(this)}
-				fileName={this.fileName}
-				fileContents={this.fileContents}
+				getSearchResultsFiles={this.getSearchResultsFiles}
+				isIndexingComplete={this.isIndexingComplete}
+				openFile={this.openFile.bind(this)}
 			/>
 		)
 	}
@@ -40,6 +39,11 @@ export class SummarizeNoteModal extends Modal {
 		const { contentEl } = this;
 		if (this.myRoot) this.myRoot.unmount()
 		contentEl.empty();
+	}
+
+	async openFile(searchResult: SearchResult) {
+		await this.app.workspace.getLeaf().openFile(searchResult.abstractFile)
+		this.close()
 	}
 
 	async saveToAndOpenNewNote(text: string) {
@@ -53,7 +57,7 @@ export class SummarizeNoteModal extends Modal {
 
 	async appendToActiveNote(text: string) {
 		const currentVal = this.app.workspace.activeEditor?.editor?.getValue()
-		this.app.workspace.activeEditor?.editor?.setValue(`${currentVal} \n\n ${text}`)
+		this.app.workspace.activeEditor?.editor?.setValue(`${currentVal}\n\n${text}`)
 		this.app.workspace.activeEditor?.editor?.scrollTo(this.app.workspace.activeEditor?.editor?.lastLine())
 		this.app.workspace.activeEditor?.editor?.focus()
 		this.close()

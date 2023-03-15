@@ -58,16 +58,22 @@ export class VectorStore {
 	}
 
 	getNearestVectors(searchVector: Vector, resultNumber: number, relevanceThreshold: number): Map<string, number> {
+		console.log(`Beginning search`)
 		const results: Array<[number, string, Vector]> = []
 		
 		for (const entry of this.filePathToVector.entries()) {
 			const cosineSimilarity = similarity(searchVector, entry[1])
+			console.log(`File: ${entry[0]} Similarity: ${cosineSimilarity}`)
 			results.push([cosineSimilarity, entry[0], entry[1]])
 		}
 
 		results.sort((a, b) => {
 			return a[0]> b[0] ? -1: 1
 		})
+
+		console.log(`Sorted results: ${JSON.stringify(results.map((value) => {
+			return [value[1], value[0]]
+		}))}`)
 
 		const result: Iterable<[string, number]> = results
 			.splice(0, resultNumber)
@@ -76,6 +82,7 @@ export class VectorStore {
 				return [value[1], value[0]]
 			})
 
+		console.log(`Filtered, final result: ${JSON.stringify(result)}`)
 		return new Map(result)
 	}
 
