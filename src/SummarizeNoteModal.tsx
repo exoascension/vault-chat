@@ -43,8 +43,8 @@ export class SummarizeNoteModal extends Modal {
 	}
 
 	async saveToAndOpenNewNote(text: string) {
-		const noteRandomId = Math.floor(Math.random() * (100000 - 1) + 1);
-		const newNote = await this.app.vault.create(`/vaultchat-${noteRandomId}.md`, text)
+		const summaryTitle = this.fileName.substring(0, this.fileName.length-3)
+		const newNote = await this.app.vault.create(`/${summaryTitle} - Vault Chat Summary.md`, text)
 		await this.app.workspace.getLeaf().openFile(newNote)
 		this.app.workspace.activeEditor?.editor?.scrollTo(this.app.workspace.activeEditor?.editor?.lastLine())
 		this.app.workspace.activeEditor?.editor?.focus()
