@@ -1,4 +1,4 @@
-import { App, PluginSettingTab, Setting, SliderComponent } from 'obsidian'
+import { App, PluginSettingTab, Setting } from 'obsidian'
 import VaultChat from './main'
 
 export interface VaultChatSettings {

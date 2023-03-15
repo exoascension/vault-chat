@@ -143,8 +143,12 @@ export default class VaultChat extends Plugin {
 		const searchResults = Array.from(nearestVectors.keys())
 		const hydratedResults = []
 		for (const searchResult of searchResults) {
-			const abstractFile = app?.vault.getAbstractFileByPath(searchResult) as TFile
-			const fileContentsOrEmpty = await app?.vault.read(abstractFile)
+			const abstractFile = this.app.vault.getAbstractFileByPath(searchResult)
+			if (!(abstractFile instanceof TFile)) {
+				console.warn(`Unexpected file type in search results. File: ${abstractFile?.name} `)
+				continue
+			}
+			const fileContentsOrEmpty = await this.app.vault.read(abstractFile)
 			let fileContents: string = fileContentsOrEmpty ? fileContentsOrEmpty : ''
 			if (fileContents.length > 1000) {
 				fileContents = `${fileContents.substring(0, 1000)}...`

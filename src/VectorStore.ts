@@ -79,8 +79,8 @@ export class VectorStore {
 		return new Map(result)
 	}
 
-	getByFilePath(filePath: string): Vector {
-		return this.filePathToVector.get(filePath) as Vector
+	getByFilePath(filePath: string): Vector | undefined {
+		return this.filePathToVector.get(filePath)
 	}
 
 	async addVector(filePath: string, vector: Vector) {
