@@ -77,12 +77,6 @@ export class VectorStore {
 			const newHash = this.generateMd5Hash(fileContents)
 			if ((oldFileEntry && newHash !== oldFileEntry.md5hash) || // EXISTING FILE IN DB TO BE UPDATED
 				!oldFileEntry) { // NEW FILE IN DB TO BE ADDED
-				console.debug(`Decided to update ${file.path} because 
-				oldfile? ${oldFileEntry !== undefined}
-				hashChanged? ${oldFileEntry && newHash !== oldFileEntry.md5hash}
-				new mTime? ${file.stat.mtime}
-				old mTime? ${oldFileEntry?.mTs}
-				`)
 				entriesToUpdate.push({
 					path: file.path,
 					chunk: false,
