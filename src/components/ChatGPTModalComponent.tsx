@@ -1,7 +1,7 @@
 import * as React from "react";
 import { useState } from "react";
 import { OpenAIHandler } from "../OpenAIHandler";
-import { ChatCompletionRequestMessage } from "openai/api";
+import {ChatCompletionRequestMessage, ChatCompletionRequestMessageRoleEnum} from "openai/api";
 import { SearchResult } from "../main";
 import {SaveOptions} from "./SaveOptions";
 import {ChatGPTConversation} from "./ChatGPTConversation";
@@ -11,7 +11,7 @@ interface Props {
 	openAIHandler: OpenAIHandler,
 	getSearchResultsFiles: (searchTerm: string) => Promise<Array<SearchResult>>,
 
-	isIndexingComplete: Promise<boolean>,
+	isIndexingComplete: Promise<void>,
 
 	saveToAndOpenNewNote: (text: string) => never,
 

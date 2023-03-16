@@ -2,7 +2,7 @@ import { Plugin, TFile} from 'obsidian';
 import { OpenAIHandler } from "./OpenAIHandler"
 import { VaultChatSettingTab, VaultChatSettings } from './UserSettings';
 import { debounce } from 'obsidian'
-import {ChatGPTModal} from "./ChatGPTModal";
+import { AskChatGPTModal } from "./AskChatGPTModal";
 import {NearestVectorResult, VectorStore2} from "./VectorStore2";
 
 const DEFAULT_SETTINGS: VaultChatSettings = {
@@ -65,7 +65,7 @@ export default class VaultChat extends Plugin {
 			id: 'ask-chatgpt',
 			name: 'Ask ChatGPT',
 			callback: () => {
-				new ChatGPTModal(this.app, this, this.openAIHandler, this.getSearchResultsFiles.bind(this), indexingPromise).open();
+				new AskChatGPTModal(this.app, this, this.openAIHandler, this.getSearchResultsFiles.bind(this), indexingPromise).open();
 			}
 		});
 		this.registerEvent(this.app.vault.on('create', async (file) => {
@@ -135,7 +135,7 @@ export default class VaultChat extends Plugin {
 			}
 			if (!contents) {
 				const abstractFile = this.app.vault.getAbstractFileByPath(nearest.path) as TFile
-				const fileContentsOrEmpty = await app?.vault.read(abstractFile)
+				const fileContentsOrEmpty = await this.app.vault.read(abstractFile)
 				let fileContents: string = fileContentsOrEmpty ? fileContentsOrEmpty : ''
 				if (fileContents.length > 1000) {
 					fileContents = `${fileContents.substring(0, 1000)}...`

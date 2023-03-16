@@ -1,8 +1,4 @@
-<<<<<<< Updated upstream
-import {ChatCompletionResponseMessage, Configuration, OpenAIApi} from "openai";
-=======
 import {Configuration, CreateEmbeddingResponse, OpenAIApi} from "openai";
->>>>>>> Stashed changes
 import { Vector } from "./VectorStore";
 import {ChatCompletionRequestMessage, CreateChatCompletionResponse} from "openai/api";
 
