@@ -1,4 +1,8 @@
+<<<<<<< Updated upstream
 import {ChatCompletionResponseMessage, Configuration, OpenAIApi} from "openai";
+=======
+import {Configuration, CreateEmbeddingResponse, OpenAIApi} from "openai";
+>>>>>>> Stashed changes
 import { Vector } from "./VectorStore";
 import {ChatCompletionRequestMessage, CreateChatCompletionResponse} from "openai/api";
 
@@ -15,7 +19,7 @@ export class OpenAIHandler {
 	}
 	
 	createEmbedding = async (fileText: string): Promise<Vector | undefined> => {
-		let truncatedText = fileText.substring(0, maxInputLength)
+		const truncatedText = fileText.substring(0, maxInputLength)
 		try {
 			const entry = await this.openai.createEmbedding({
 				// there is a 1 Gb limit on the input
@@ -29,11 +33,31 @@ export class OpenAIHandler {
 		}
 	}
 
-	createChatCompletion = async (messages: Array<ChatCompletionRequestMessage>): Promise<CreateChatCompletionResponse> => {
-		const response = await this.openai.createChatCompletion({
-			"model": "gpt-3.5-turbo",
-			messages
-		});
-		return response.data
+	createEmbeddingBatch = async (data: string[]): Promise<CreateEmbeddingResponse | undefined> => {
+		const truncatedTexts = data.map(s => s.substring(0, maxInputLength))
+		try {
+			const response = await this.openai.createEmbedding({
+				// there is a 1 Gb limit on the input
+				model: "text-embedding-ada-002",
+				input: truncatedTexts
+			});
+			return response.data
+		} catch (e) {
+			console.error(`Error during createEmbedding call: ${JSON.stringify(e)}`)
+			return undefined
+		}
+	}
+
+	createChatCompletion = async (messages: Array<ChatCompletionRequestMessage>): Promise<CreateChatCompletionResponse | undefined> => {
+		try {
+			const response = await this.openai.createChatCompletion({
+				"model": "gpt-3.5-turbo",
+				messages
+			});
+			return response.data
+		} catch (e) {
+			console.error(`Error during completion call: ${JSON.stringify(e)}`)
+			return undefined
+		}
 	}
 }

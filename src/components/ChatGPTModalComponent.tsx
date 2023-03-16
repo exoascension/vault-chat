@@ -63,6 +63,20 @@ export const ChatGPTModalComponent: React.FC<Props> = (props: Props) => {
 		setInputDisabled(true)
 
 		const response = await openAIHandler.createChatCompletion(newInternalConversation)
+		if (!response) {
+			// don't show system messages to the user
+			const newRenderedConversation = newInternalConversation.filter(
+				message => message.role !== ChatCompletionRequestMessageRoleEnum.System)
+			newRenderedConversation.push({
+				role: ChatCompletionRequestMessageRoleEnum.Assistant,
+				content: `I've encountered an error and cannot complete your request`
+			})
+			setInternalConversation(newInternalConversation)
+			setRenderedConversation(newRenderedConversation)
+			setUserMessage('')
+			setInputDisabled(false)
+			return
+		}
 
 		// be mindful of the 4096 token limit and remove some old context if we're getting close
 		const responseTokensTotal = response.usage?.total_tokens
