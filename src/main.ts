@@ -3,7 +3,7 @@ import { OpenAIHandler } from "./OpenAIHandler"
 import { VaultChatSettingTab, VaultChatSettings } from './UserSettings';
 import { debounce } from 'obsidian'
 import { AskChatGPTModal } from "./AskChatGPTModal";
-import {NearestVectorResult, VectorStore2} from "./VectorStore2";
+import {NearestVectorResult, VectorStore} from "./VectorStore";
 
 const DEFAULT_SETTINGS: VaultChatSettings = {
 	apiKey: 'OpenAI API key goes here',
@@ -25,7 +25,7 @@ export default class VaultChat extends Plugin {
 
 	searchActive = false;
 
-	vectorStore: VectorStore2;
+	vectorStore: VectorStore;
 
 	openAIHandler: OpenAIHandler;
 
@@ -56,7 +56,7 @@ export default class VaultChat extends Plugin {
 
 	async initializePlugin() {
 		this.openAIHandler = new OpenAIHandler(this.settings.apiKey)
-		this.vectorStore = new VectorStore2(this.app.vault, this.openAIHandler.createEmbeddingBatch, this.openAIHandler.createChatCompletion)
+		this.vectorStore = new VectorStore(this.app.vault, this.openAIHandler.createEmbeddingBatch, this.openAIHandler.createChatCompletion)
 		await this.vectorStore.initDatabase()
 		const files = this.app.vault.getMarkdownFiles()
 		const indexingPromise = this.vectorStore.updateDatabase(files)

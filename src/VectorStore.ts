@@ -1,186 +1,292 @@
-import { TFile, Vault } from "obsidian";
+import {TFile, Vault} from 'obsidian';
+import {Md5} from 'ts-md5';
+import {
+	ChatCompletionRequestMessage,
+	ChatCompletionRequestMessageRoleEnum,
+	CreateChatCompletionResponse
+} from 'openai/api';
 // @ts-ignore
-import similarity from "compute-cosine-similarity";
-import {Throttler} from "./Throttler";
+import similarity from 'compute-cosine-similarity';
+import {CreateEmbeddingResponse} from "openai";
 
-export type Vector = Array<number>
+type Vector = Array<number>
+type Chunk = {
+	contents: string;
+	embedding: Vector;
+}
+type FileEntry = {
+	eTs: number;
+	mTs: number;
+	md5hash: string;
+	fileEmbedding: Vector;
+	chunks: Array<Chunk>;
+}
+type DatabaseFile = {
+	version: number;
+	mTs: number;
+	embeddings: Map<string, FileEntry>;
+}
+export type NearestVectorResult = {
+	path: string;
+	chunk: string | undefined;
+	similarity: number;
+}
+type FileEntryUpdate = {
+	path: string;
+	chunk: boolean;
+	hash: string | undefined;
+	contents: string;
+	embedding: Vector | undefined;
+	mTs: number | undefined;
+}
 
+const isChunk = (item: Chunk | undefined): item is Chunk => {
+	return !!item
+}
 export class VectorStore {
-	constructor(vault: Vault) {
-		this.vault = vault
-		this.initializeFile()
-	}
-
+	private readonly dbFileName = "vault-chat.json"
+	private readonly dbFilePath = `.obsidian/plugins/vault-chat/${this.dbFileName}`
+	private embeddings: Map<string, FileEntry>
 	private vault: Vault
-	private dbFileName = "database2.json"
-	private dbFilePath = `.obsidian/plugins/vault-chat/${this.dbFileName}`
+	private readonly createEmbeddingBatch: (textsToEmbed: string[]) => Promise<CreateEmbeddingResponse | undefined>
+	private readonly createCompletion: (messages: Array<ChatCompletionRequestMessage>) => Promise<CreateChatCompletionResponse | undefined>
 
-	private filePathToVector: Map<string, Vector>;
-	isReady: Promise<boolean>;
-	isIndexingComplete: Promise<boolean>;
+	constructor(vault: Vault, createEmbeddingBatch: (textsToEmbed: string[]) => Promise<CreateEmbeddingResponse | undefined>, createCompletion: (messages: Array<ChatCompletionRequestMessage>) => Promise<CreateChatCompletionResponse | undefined>) {
+		this.vault = vault
+		this.createEmbeddingBatch = createEmbeddingBatch
+		this.createCompletion = createCompletion
+	}
 
-	/*
-	   this is the most conservative rate limit for openai
-	   we are throttling this function to ensure indexing the vault will succeed
-	   this is an MVP solution - ideal solution would handle the rate limiting of a specific token since
-	   the rate limit could change over time and different tokens can have different rate limits
-	 */
-	private throttler = new Throttler({
-		tokensPerInterval: 20,
-		interval: "minute"
-	})
+	async initDatabase() {
+		this.embeddings = await this.readEmbeddingsFromDatabaseFile()
+	}
 
-	private async initializeFile() {
-		const fileSystemAdapter = this.vault.adapter
-		this.isReady = new Promise(async resolve => {
-			const vectorFileExists = await fileSystemAdapter.exists(this.dbFilePath)
-			if (vectorFileExists) {
-				const vectorFileContents = await fileSystemAdapter.read(this.dbFilePath)
-				try {
-					this.filePathToVector = new Map(JSON.parse(vectorFileContents))
-				} catch (e) {
-					console.error(`Unable to load existing database json, starting fresh`, e)
-					this.filePathToVector = new Map()
-					await this.saveVectorFile()
+	async updateDatabase(latestFiles: TFile[]) {
+		const newEmbeddings: Map<string, FileEntry> = new Map()
+		const oldEmbeddings: Map<string, FileEntry> = new Map(
+			JSON.parse(
+				JSON.stringify(Array.from(this.embeddings))
+			)
+		);
+		const entriesToUpdate: FileEntryUpdate[] = []
+		for (const file of latestFiles) {
+			const oldFileEntry = oldEmbeddings.get(file.path)
+			const fileContents = await this.vault.read(file)
+			const newHash = this.generateMd5Hash(fileContents)
+			if ((oldFileEntry && newHash !== oldFileEntry.md5hash) || // EXISTING FILE IN DB TO BE UPDATED
+				!oldFileEntry) { // NEW FILE IN DB TO BE ADDED
+				entriesToUpdate.push({
+					path: file.path,
+					chunk: false,
+					hash: newHash,
+					contents: fileContents,
+					embedding: undefined,
+					mTs: file.stat.mtime
+				})
+				const chunks = await this.chunkFile(fileContents) // todo handle empty files or very short files!
+				if (!chunks) {
+					console.error('failed to get chunks from file - file entry failing - lets skip it for now')
+					// todo should maybe track failed files
+					continue
 				}
-				resolve(true)
-			} else {
-				this.filePathToVector = new Map()
-				await this.saveVectorFile()
-				resolve(true)
+				chunks.forEach(chunk => {
+					entriesToUpdate.push({
+						path: file.path,
+						chunk: true,
+						hash: undefined,
+						contents: chunk,
+						embedding: undefined,
+						mTs: undefined
+					})
+				})
 			}
-		})
-	}
-
-	private async saveVectorFile() { // todo debounce
-		const fileSystemAdapter = this.vault.adapter
-		await fileSystemAdapter.write(this.dbFilePath, JSON.stringify(Array.from(this.filePathToVector.entries())))
-	}
-
-	getNearestVectors(searchVector: Vector, resultNumber: number, relevanceThreshold: number): Map<string, number> {
-		const results: Array<[number, string, Vector]> = []
-		
-		for (const entry of this.filePathToVector.entries()) {
-			const cosineSimilarity = similarity(searchVector, entry[1])
-			results.push([cosineSimilarity, entry[0], entry[1]])
 		}
-
-		results.sort((a, b) => {
-			return a[0]> b[0] ? -1: 1
+		const embeddingRequestTexts = entriesToUpdate.map(e => e.contents)
+		const response = await this.createEmbeddingBatch(embeddingRequestTexts)
+		if (!response) {
+			console.error(`embedding didn't work! - failing indexing completely for that`)
+			return
+		}
+		response.data.forEach(embeddingResponse => {
+			entriesToUpdate[embeddingResponse.index].embedding = embeddingResponse.embedding
 		})
 
-		const result: Iterable<[string, number]> = results
-			.splice(0, resultNumber)
-			.filter(entry => entry[0] > relevanceThreshold)
-			.map((value) => {
-				return [value[1], value[0]]
+		const entriesByPath: FileEntryUpdate[][] = this.groupBy(entriesToUpdate, 'path')
+		for (const entries of entriesByPath) {
+			const file = entries.find(x => !x.chunk)
+			if (!file || !file.mTs || !file.hash || !file.embedding) {
+				console.warn('something weird happened with this entry - skipping it') // todo
+				continue
+			}
+			const chunks: Chunk[] = entries.filter(x => (x.chunk && x.embedding)).map(c => ({
+				contents: c.contents,
+				// eslint-disable-next-line @typescript-eslint/no-non-null-assertion
+				embedding: c.embedding! // cant be null since we filter first
+			}))
+			const fileEntry: FileEntry = {
+				eTs: Date.now(),
+				mTs: file.mTs,
+				md5hash: file.hash,
+				fileEmbedding: file.embedding,
+				chunks: chunks
+			}
+			newEmbeddings.set(file.path, fileEntry)
+		}
+		this.embeddings = newEmbeddings
+		await this.saveEmbeddingsToDatabaseFile()
+	}
+
+	private async generateFileEntry(fileContents: string, mtime: number, md5hash: string): Promise<FileEntry | undefined> {
+		const chunks = await this.chunkFile(fileContents) // todo handle empty files or very short files!
+		if (!chunks) {
+			console.error('failed to get chunks from file - file entry failing')
+			return
+		}
+		const fileEmbeddingPromise = this.createEmbeddingBatch([fileContents])
+		const cEP: Promise<Chunk | undefined>[] = chunks.map(c => {
+			const p: Promise<Chunk | undefined> = this.createEmbeddingBatch([c]).then(e => {
+				if (e === undefined) return undefined
+				return ({
+					contents: c,
+					embedding: e.data[0].embedding
+				});
 			})
-
-		return new Map(result)
-	}
-
-	getByFilePath(filePath: string): Vector | undefined {
-		return this.filePathToVector.get(filePath)
-	}
-
-	async addVector(filePath: string, vector: Vector) {
-		this.filePathToVector.set(filePath, vector)
-		await this.saveVectorFile()
-	}
-
-	async updateVectorByFilename(filePath: string, updatedVector: Vector) {
-		this.filePathToVector.set(filePath, updatedVector)
-		await this.saveVectorFile()
-	}
-
-	async updateFilename(oldFilePath: string, newFilePath: string, newVector: Vector) {
-		this.filePathToVector.delete(oldFilePath)
-		this.filePathToVector.set(newFilePath, newVector)
-		await this.saveVectorFile()
-	}
-
-	async deleteByFilePath(filepath: string) {
-		const vector = this.filePathToVector.get(filepath)
-		if(vector != undefined) {
-			this.filePathToVector.delete(filepath)
-			await this.saveVectorFile()
-		}
-	}
-
-	async addOrUpdateFile(userFile: TFile, createEmbedding: (fileText: string) => Promise<Vector | undefined>) {
-		const newVector = await this.getNewVector(userFile, createEmbedding)
-		if (newVector === undefined) {
-			console.warn(`Failed to add or update file to the database: ${userFile.name}`)
-		} else {
-			await this.updateVectorByFilename(userFile.path, newVector)
-		}
-	}
-
-	async updateVectorStore(userFiles: Array<TFile>, createEmbedding: (fileText: string) => Promise<Vector | undefined>) {
-		this.isIndexingComplete = new Promise(async (resolve) => {
-			const newFilePathToVector: Map<string, Vector> = new Map()
-			// create temp copy of the current filePathToVector map since we will overwrite this.filePathToVector as we go
-			const oldFilePathToVector: Map<string, Vector> = new Map(
-				JSON.parse(
-					JSON.stringify(Array.from(this.filePathToVector))
-				)
-			);
-			const userMdFiles = userFiles.filter(file => file.extension === 'md')
-			// batch calls to create embeddings so that it saves as it goes,
-			// and you don't have to start over if it doesn't finish
-			const batchedFiles: Array<Array<TFile>> = this.chunkArray(userMdFiles, 10)
-			for (const batchOfFiles of batchedFiles) {
-				let hasChanges = false
-				for (const userFile of batchOfFiles) {
-					if (oldFilePathToVector.get(userFile.path)) {
-						// todo implement below to compare hash
-						const fileHasChanged = false
-						if (fileHasChanged) {
-							const newVector = await this.getNewVector(userFile, createEmbedding)
-							if (newVector !== undefined) {
-								newFilePathToVector.set(userFile.path, newVector)
-								hasChanges = true
-							}
-						} else {
-							const existingVector = oldFilePathToVector.get(userFile.path)
-							newFilePathToVector.set(userFile.path, existingVector as Vector)
-						}
-					} else {
-						const newVector = await this.getNewVector(userFile, createEmbedding)
-						if (newVector !== undefined) {
-							newFilePathToVector.set(userFile.path, newVector)
-							hasChanges = true
-						}
-					}
-				}
-				if (hasChanges) {
-					this.filePathToVector = newFilePathToVector
-					await this.saveVectorFile()
-				}
-			}
-			resolve(true)
+			return p
 		})
-		return this.isIndexingComplete
+		const chunksWithEmbeddings: Array<Chunk | undefined> = await Promise.all(cEP)
+		const chunksNotUndefined: Chunk[] = chunksWithEmbeddings.filter(isChunk)
+		const fileEmbedding = await fileEmbeddingPromise
+		if (!fileEmbedding) {
+			console.error('failed to embed file')
+			return
+		}
+		return {
+			eTs: Date.now(),
+			mTs: mtime,
+			md5hash: md5hash,
+			fileEmbedding: fileEmbedding.data[0].embedding,
+			chunks: chunksNotUndefined
+		}
 	}
 
-	private async getNewVector(userFile: TFile, createEmbedding: (fileText: string) => Promise<Vector | undefined>): Promise<Vector | undefined> {
-			return app.vault.read(userFile).then((fileContent) =>
-				this.throttler.throttleCall(() =>
-					createEmbedding(`${userFile.path} ${fileContent}`)))
+	async addFile(file: TFile) {
+		const existingFile = this.embeddings.get(file.path)
+		if (existingFile) return
+		const fileContents = await this.vault.read(file)
+		const hash = this.generateMd5Hash(fileContents)
+		const fileEntry = await this.generateFileEntry(fileContents, file.stat.mtime, hash)
+		if (fileEntry) {
+			this.embeddings.set(file.path, fileEntry)
+		}
+		await this.saveEmbeddingsToDatabaseFile() // todo debounce
 	}
 
-	// https://stackoverflow.com/a/37826698
-	private chunkArray(inputArray: Array<any>, chunkSize: number) {
-		return inputArray.reduce((resultArray: any[][], item: any, index: number) => {
-			const chunkIndex = Math.floor(index/chunkSize)
-
-			if(!resultArray[chunkIndex]) {
-				resultArray[chunkIndex] = [] // start a new chunk
+	async updateFile(file: TFile) {
+		const existingFile = this.embeddings.get(file.path)
+		if (existingFile) {
+			const fileContents = await this.vault.read(file)
+			const hash = this.generateMd5Hash(fileContents)
+			if (hash !== existingFile.md5hash) {
+				const fileEntry = await this.generateFileEntry(fileContents, file.stat.mtime, hash)
+				if (fileEntry) {
+					this.embeddings.set(file.path, fileEntry)
+				}
+			} else {
+				console.log('no change, not updating db')
 			}
+		} else {
+			await this.addFile(file)
+		}
+		await this.saveEmbeddingsToDatabaseFile() // todo debounce
+	}
 
-			resultArray[chunkIndex].push(item)
+	async deleteFileByPath(filePath: string) {
+		this.embeddings.delete(filePath)
+		await this.saveEmbeddingsToDatabaseFile() // todo debounce
+	}
 
-			return resultArray
-		}, [])
+	private generateMd5Hash(content: string) {
+		return Md5.hashStr(content)
+	}
+
+	private async chunkFile(fileContents: string): Promise<string[] | undefined> {
+		const messageRequest: ChatCompletionRequestMessage = {
+			role: ChatCompletionRequestMessageRoleEnum.User,
+			content: `I am indexing a file for search. 
+			When I search for a term, I want to be able to find the most relevant chunk of content from the file. 
+			To do that, I need to first break the file into topical chunks so that I can create embeddings for each chunk. 
+			When I search, I will compute the cosine similarity between the chunks and my search term and return chunks that are nearest. 
+			Please break the following file into chunks that would suit my use case. 
+			When you tell me the chunks you have decided on, include the original content from the file. Do not summarize. 
+			Prefix each chunk with "<<<CHUNK START>>>" so that I know where they begin. Here is the file:
+			${fileContents}`
+		}
+		const response = await this.createCompletion([messageRequest])
+		if (!response) {
+			console.error('failed to get completion for chunks')
+			return undefined
+		}
+		return response.choices[0].message?.content.split('<<<CHUNK START>>>').filter(t => t !== '\n\n') // todo error handling
+	}
+
+	private async saveEmbeddingsToDatabaseFile() {
+		const fileSystemAdapter = this.vault.adapter
+		const dbFile: DatabaseFile = {
+			version: 2,
+			mTs: Date.now(),
+			embeddings: this.embeddings
+		}
+		await fileSystemAdapter.write(this.dbFilePath, JSON.stringify(dbFile))
+	}
+
+	private async readEmbeddingsFromDatabaseFile(): Promise<Map<string, FileEntry>> {
+		const fileSystemAdapter = this.vault.adapter
+		const dbFileExists = await fileSystemAdapter.exists(this.dbFilePath)
+		if (!dbFileExists) {
+			return new Map()
+		}
+		const dbFileString = await fileSystemAdapter.read(this.dbFilePath)
+		const dbFile: DatabaseFile = JSON.parse(dbFileString)
+		return dbFile.embeddings
+	}
+
+	getNearestVectors(searchVector: Vector, resultNumber: number, relevanceThreshold: number): NearestVectorResult[] {
+		const nearestVectors: NearestVectorResult[] = []
+
+		for (const entry of this.embeddings.entries()) {
+			const filePath = entry[0]
+			const fileEntry = entry[1]
+			const fileSimilarity = similarity(searchVector, fileEntry.fileEmbedding)
+			nearestVectors.push({
+				path: filePath,
+				chunk: undefined,
+				similarity: fileSimilarity
+			})
+			fileEntry.chunks.forEach(chunk => {
+				const chunkSimilarity = similarity(searchVector, chunk.embedding)
+				nearestVectors.push({
+					path: filePath,
+					chunk: chunk.contents,
+					similarity: chunkSimilarity
+				})
+			})
+		}
+
+		nearestVectors.sort((a, b) => {
+			const aEmbedding = a.similarity
+			const bEmbedding = b.similarity
+			return aEmbedding > bEmbedding ? -1: 1
+		})
+
+		return nearestVectors
+			.splice(0, resultNumber)
+			.filter(e => e.similarity > relevanceThreshold)
+	}
+
+	private groupBy(entries: any[], key: string): any[][] {
+		return Object.values(entries.reduce(function(prev, cur) {
+			(prev[cur[key]] = prev[cur[key]] || []).push(cur);
+			return prev;
+		}, {}))
 	}
 }
