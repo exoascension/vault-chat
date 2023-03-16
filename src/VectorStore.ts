@@ -24,7 +24,7 @@ type FileEntry = {
 type DatabaseFile = {
 	version: number;
 	mTs: number;
-	embeddings: Map<string, FileEntry>;
+	embeddings: [string, FileEntry][];
 }
 export type NearestVectorResult = {
 	path: string;
@@ -39,6 +39,8 @@ type FileEntryUpdate = {
 	embedding: Vector | undefined;
 	mTs: number | undefined;
 }
+type CreateEmbeddingFunction = (textsToEmbed: string[]) => Promise<CreateEmbeddingResponse | undefined>
+type CreateCompletionFunction = (messages: Array<ChatCompletionRequestMessage>) => Promise<CreateChatCompletionResponse | undefined>
 
 const isChunk = (item: Chunk | undefined): item is Chunk => {
 	return !!item
@@ -48,10 +50,10 @@ export class VectorStore {
 	private readonly dbFilePath = `.obsidian/plugins/vault-chat/${this.dbFileName}`
 	private embeddings: Map<string, FileEntry>
 	private vault: Vault
-	private readonly createEmbeddingBatch: (textsToEmbed: string[]) => Promise<CreateEmbeddingResponse | undefined>
-	private readonly createCompletion: (messages: Array<ChatCompletionRequestMessage>) => Promise<CreateChatCompletionResponse | undefined>
+	private readonly createEmbeddingBatch: CreateEmbeddingFunction
+	private readonly createCompletion: CreateCompletionFunction
 
-	constructor(vault: Vault, createEmbeddingBatch: (textsToEmbed: string[]) => Promise<CreateEmbeddingResponse | undefined>, createCompletion: (messages: Array<ChatCompletionRequestMessage>) => Promise<CreateChatCompletionResponse | undefined>) {
+	constructor(vault: Vault, createEmbeddingBatch: CreateEmbeddingFunction, createCompletion: CreateCompletionFunction) {
 		this.vault = vault
 		this.createEmbeddingBatch = createEmbeddingBatch
 		this.createCompletion = createCompletion
@@ -75,6 +77,12 @@ export class VectorStore {
 			const newHash = this.generateMd5Hash(fileContents)
 			if ((oldFileEntry && newHash !== oldFileEntry.md5hash) || // EXISTING FILE IN DB TO BE UPDATED
 				!oldFileEntry) { // NEW FILE IN DB TO BE ADDED
+				console.debug(`Decided to update ${file.path} because 
+				oldfile? ${oldFileEntry !== undefined}
+				hashChanged? ${oldFileEntry && newHash !== oldFileEntry.md5hash}
+				new mTime? ${file.stat.mtime}
+				old mTime? ${oldFileEntry?.mTs}
+				`)
 				entriesToUpdate.push({
 					path: file.path,
 					chunk: false,
@@ -100,6 +108,9 @@ export class VectorStore {
 					})
 				})
 			}
+		}
+		if (!entriesToUpdate || entriesToUpdate.length === 0) {
+			return
 		}
 		const embeddingRequestTexts = entriesToUpdate.map(e => e.contents)
 		const response = await this.createEmbeddingBatch(embeddingRequestTexts)
@@ -234,7 +245,7 @@ export class VectorStore {
 		const dbFile: DatabaseFile = {
 			version: 2,
 			mTs: Date.now(),
-			embeddings: this.embeddings
+			embeddings: Array.from(this.embeddings.entries())
 		}
 		await fileSystemAdapter.write(this.dbFilePath, JSON.stringify(dbFile))
 	}
@@ -247,7 +258,7 @@ export class VectorStore {
 		}
 		const dbFileString = await fileSystemAdapter.read(this.dbFilePath)
 		const dbFile: DatabaseFile = JSON.parse(dbFileString)
-		return dbFile.embeddings
+		return new Map(dbFile.embeddings)
 	}
 
 	getNearestVectors(searchVector: Vector, resultNumber: number, relevanceThreshold: number): NearestVectorResult[] {
