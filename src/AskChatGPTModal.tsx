@@ -42,8 +42,9 @@ export class AskChatGPTModal extends Modal {
 	}
 
 	async saveToAndOpenNewNote(text: string) {
-		const dateTime = new Date().toString().replace(/:/g,"-").split("G")[0]
-		const newNote = await this.app.vault.create(`/Vault Chat ${dateTime}.md`, text)
+		const noteRandomId = Math.floor(Math.random() * (100000 - 1) + 1);
+		const dateTime = (new Date().toISOString().split('T')[0])
+		const newNote = await this.app.vault.create(`/VaultChat-${dateTime}-${noteRandomId}.md`, text)
 		await this.app.workspace.getLeaf().openFile(newNote)
 		this.app.workspace.activeEditor?.editor?.scrollTo(this.app.workspace.activeEditor?.editor?.lastLine())
 		this.app.workspace.activeEditor?.editor?.focus()
