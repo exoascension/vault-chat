@@ -1,4 +1,4 @@
-import { Plugin, TFile} from 'obsidian';
+import { Editor, MarkdownView, Plugin, TFile} from 'obsidian';
 import { VectorStore } from "./VectorStore";
 import { OpenAIHandler } from "./OpenAIHandler"
 import { VaultChatSettingTab, VaultChatSettings } from './UserSettings';
@@ -70,18 +70,30 @@ export default class VaultChat extends Plugin {
 					new AskChatGPTModal(this.app, this, this.openAIHandler, this.getSearchResultsFiles.bind(this), indexingPromise).open();
 				}
 			});
+			
 			this.addCommand({
 				id: 'summarize-note',
 				name: 'Summarize note',
-				callback: async () => {
-					const activeFile = this.app.workspace.activeEditor?.file
-					if (activeFile) {
+				checkCallback: (checking: boolean) => {
+				const activeFile = this.app.workspace.activeEditor?.file
+				if(checking){
+					if(activeFile){
+						return  true
+					}else{
+						return false
+					}
+				}else{
+					if(activeFile){
 						const fileName = activeFile.name
-						const fileContents = await this.app.vault.read(activeFile)
-						new SummarizeNoteModal(this.app, this, this.openAIHandler, fileName, fileContents).open();
+						this.app.vault.read(activeFile).then(f => { new SummarizeNoteModal(this.app, this, this.openAIHandler, fileName, f).open()})
+						return  true
+					}else{
+						return false
 					}
 				}
+				}
 			});
+
 			this.registerEvent(this.app.vault.on('create', async (file) => {
 				await indexingPromise
 				if (file instanceof TFile && file.extension === 'md') {
