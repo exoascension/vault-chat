@@ -42,9 +42,6 @@ type FileEntryUpdate = {
 type CreateEmbeddingFunction = (textsToEmbed: string[]) => Promise<CreateEmbeddingResponse | undefined>
 type CreateCompletionFunction = (messages: Array<ChatCompletionRequestMessage>) => Promise<CreateChatCompletionResponse | undefined>
 
-const isChunk = (item: Chunk | undefined): item is Chunk => {
-	return !!item
-}
 export class VectorStore {
 	private readonly dbFileName = "vault-chat.json"
 	private readonly dbFilePath = `.obsidian/plugins/vault-chat/${this.dbFileName}`
@@ -64,7 +61,6 @@ export class VectorStore {
 	}
 
 	async updateDatabase(latestFiles: TFile[]) {
-		const newEmbeddings: Map<string, FileEntry> = new Map()
 		const oldEmbeddings: Map<string, FileEntry> = new Map(
 			JSON.parse(
 				JSON.stringify(Array.from(this.embeddings))
@@ -77,32 +73,59 @@ export class VectorStore {
 			const newHash = this.generateMd5Hash(fileContents)
 			if ((oldFileEntry && newHash !== oldFileEntry.md5hash) || // EXISTING FILE IN DB TO BE UPDATED
 				!oldFileEntry) { // NEW FILE IN DB TO BE ADDED
-				entriesToUpdate.push({
-					path: file.path,
-					chunk: false,
-					hash: newHash,
-					contents: fileContents,
-					embedding: undefined,
-					mTs: file.stat.mtime
-				})
-				const chunks = await this.chunkFile(fileContents) // todo handle empty files or very short files!
-				if (!chunks) {
-					console.error('failed to get chunks from file - file entry failing - lets skip it for now')
-					// todo should maybe track failed files
-					continue
-				}
-				chunks.forEach(chunk => {
-					entriesToUpdate.push({
-						path: file.path,
-						chunk: true,
-						hash: undefined,
-						contents: chunk,
-						embedding: undefined,
-						mTs: undefined
-					})
-				})
+				const entries = await this.getEntriesToUpdate(file, newHash, fileContents)
+				entriesToUpdate.concat(entries)
 			}
 		}
+		const newEmbeddings = await this.convertEntriesToEmbeddingsMap(entriesToUpdate)
+		if (newEmbeddings !== undefined) {
+			this.embeddings = newEmbeddings
+			await this.saveEmbeddingsToDatabaseFile()
+		}
+	}
+
+	private async getEntriesToUpdate(file: TFile, newHash: string, fileContents: string): Promise<FileEntryUpdate[]> {
+		const entriesToUpdate: FileEntryUpdate[] = []
+		entriesToUpdate.push({
+			path: file.path,
+			chunk: false,
+			hash: newHash,
+			contents: fileContents,
+			embedding: undefined,
+			mTs: file.stat.mtime
+		})
+		const chunks = fileContents.length > 0 ? await this.chunkFile(fileContents) : [] // todo empty files?
+		if (!chunks) {
+			console.error('failed to get chunks from file - file entry failing - lets skip it for now')
+			// todo should maybe track failed files
+			return []
+		}
+		chunks.forEach(chunk => {
+			entriesToUpdate.push({
+				path: file.path,
+				chunk: true,
+				hash: undefined,
+				contents: chunk,
+				embedding: undefined,
+				mTs: undefined
+			})
+		})
+		return entriesToUpdate
+	}
+
+	private async generateFileEntry(file: TFile, fileContents: string, md5hash: string): Promise<FileEntry | undefined> {
+		if (fileContents.length === 0) { // todo empty files?
+			return
+		}
+		const entriesToUpdate: FileEntryUpdate[] = await this.getEntriesToUpdate(file, md5hash, fileContents)
+		const newEmbeddings = await this.convertEntriesToEmbeddingsMap(entriesToUpdate)
+		if (newEmbeddings !== undefined) {
+			return newEmbeddings.get(file.path)
+		}
+	}
+
+	async convertEntriesToEmbeddingsMap(entriesToUpdate: FileEntryUpdate[]): Promise<Map<string, FileEntry> | undefined>  {
+		const newEmbeddings: Map<string, FileEntry> = new Map()
 		if (!entriesToUpdate || entriesToUpdate.length === 0) {
 			return
 		}
@@ -137,49 +160,16 @@ export class VectorStore {
 			}
 			newEmbeddings.set(file.path, fileEntry)
 		}
-		this.embeddings = newEmbeddings
-		await this.saveEmbeddingsToDatabaseFile()
-	}
-
-	private async generateFileEntry(fileContents: string, mtime: number, md5hash: string): Promise<FileEntry | undefined> {
-		const chunks = await this.chunkFile(fileContents) // todo handle empty files or very short files!
-		if (!chunks) {
-			console.error('failed to get chunks from file - file entry failing')
-			return
-		}
-		const fileEmbeddingPromise = this.createEmbeddingBatch([fileContents])
-		const cEP: Promise<Chunk | undefined>[] = chunks.map(c => {
-			const p: Promise<Chunk | undefined> = this.createEmbeddingBatch([c]).then(e => {
-				if (e === undefined) return undefined
-				return ({
-					contents: c,
-					embedding: e.data[0].embedding
-				});
-			})
-			return p
-		})
-		const chunksWithEmbeddings: Array<Chunk | undefined> = await Promise.all(cEP)
-		const chunksNotUndefined: Chunk[] = chunksWithEmbeddings.filter(isChunk)
-		const fileEmbedding = await fileEmbeddingPromise
-		if (!fileEmbedding) {
-			console.error('failed to embed file')
-			return
-		}
-		return {
-			eTs: Date.now(),
-			mTs: mtime,
-			md5hash: md5hash,
-			fileEmbedding: fileEmbedding.data[0].embedding,
-			chunks: chunksNotUndefined
-		}
+		return newEmbeddings
 	}
 
 	async addFile(file: TFile) {
 		const existingFile = this.embeddings.get(file.path)
 		if (existingFile) return
 		const fileContents = await this.vault.read(file)
+		if (fileContents.length === 0) return
 		const hash = this.generateMd5Hash(fileContents)
-		const fileEntry = await this.generateFileEntry(fileContents, file.stat.mtime, hash)
+		const fileEntry = await this.generateFileEntry(file, fileContents, hash)
 		if (fileEntry) {
 			this.embeddings.set(file.path, fileEntry)
 		}
@@ -192,7 +182,7 @@ export class VectorStore {
 			const fileContents = await this.vault.read(file)
 			const hash = this.generateMd5Hash(fileContents)
 			if (hash !== existingFile.md5hash) {
-				const fileEntry = await this.generateFileEntry(fileContents, file.stat.mtime, hash)
+				const fileEntry = await this.generateFileEntry(file, fileContents, hash)
 				if (fileEntry) {
 					this.embeddings.set(file.path, fileEntry)
 				}
@@ -231,7 +221,7 @@ export class VectorStore {
 			console.error('failed to get completion for chunks')
 			return undefined
 		}
-		return response.choices[0].message?.content.split('<<<CHUNK START>>>').filter(t => t !== '\n\n') // todo error handling
+		return response.choices[0].message?.content.split('<<<CHUNK START>>>').filter(t => t !== '\n\n').map(t => t.trim())
 	}
 
 	private async saveEmbeddingsToDatabaseFile() {

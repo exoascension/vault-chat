@@ -4,6 +4,7 @@ import { VaultChatSettingTab, VaultChatSettings } from './UserSettings';
 import { debounce } from 'obsidian'
 import { AskChatGPTModal } from "./AskChatGPTModal";
 import {NearestVectorResult, VectorStore} from "./VectorStore";
+import {SummarizeNoteModal} from "./SummarizeNoteModal";
 
 const DEFAULT_SETTINGS: VaultChatSettings = {
 	apiKey: 'OpenAI API key goes here',
@@ -68,6 +69,25 @@ export default class VaultChat extends Plugin {
 				new AskChatGPTModal(this.app, this, this.openAIHandler, this.getSearchResultsFiles.bind(this), indexingPromise).open();
 			}
 		});
+
+		this.addCommand({
+			id: 'summarize-note',
+			name: 'Summarize note',
+			checkCallback: (checking: boolean) => {
+				const activeFile = this.app.workspace.activeEditor?.file
+				if (activeFile) {
+					if (!checking) {
+						const fileName = activeFile.name
+						this.app.vault.read(activeFile).then(f => {
+							new SummarizeNoteModal(this.app, this, this.openAIHandler, fileName, f).open()
+						})
+					}
+					return  true
+				}
+				return false
+			}
+		});
+
 		this.registerEvent(this.app.vault.on('create', async (file) => {
 			await indexingPromise
 			if (file instanceof TFile && file.extension === 'md') {
@@ -88,7 +108,7 @@ export default class VaultChat extends Plugin {
 				await indexingPromise
 				await this.vectorStore.updateFile(file)
 			}
-		}, 60000, true)
+		}, 30000, true)
 
 		this.registerEvent(this.app.vault.on('modify', modifyHandler()));
 
@@ -99,9 +119,6 @@ export default class VaultChat extends Plugin {
 				await this.vectorStore.addFile(file)
 			}
 		}));
-
-		// This adds a settings tab so the user can configure various aspects of the plugin
-		this.addSettingTab(new VaultChatSettingTab(this.app, this));
 	}
 
 	onunload() {
