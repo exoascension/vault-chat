@@ -138,7 +138,7 @@ export default class VaultChat extends Plugin {
 	}
 
 	async askChatGpt(question: string) {
-		// HyDE: request note that answers the question
+		// HyDE: request note that answers the question https://github.com/texttron/hyde
 		const conversation: Array<ChatCompletionRequestMessage> = []
 		const hydeMessage: ChatCompletionRequestMessage = {
 			role: ChatCompletionResponseMessageRoleEnum.User,
@@ -154,10 +154,10 @@ export default class VaultChat extends Plugin {
 		// create embeddings for that note and all of its blocks
 		const hydeNote = hydeResponse.choices[0].message.content
 		const hydeNoteBlocks = parseMarkdown(hydeNote, '')
-		const hydeBlocksStrings = hydeNoteBlocks.map(t => `${t.path} ${t.localHeading} ${t.content}`)
-		hydeBlocksStrings.push(hydeNote)
-		hydeBlocksStrings.push(question) // include the users raw question
-		const embeddingsResponse = await this.openAIHandler.createEmbeddingBatch(hydeBlocksStrings)
+		const queryBlockStrings = hydeNoteBlocks.map(t => `${t.path} ${t.localHeading} ${t.content}`)
+		queryBlockStrings.push(hydeNote)
+		queryBlockStrings.push(question) // include the users raw question
+		const embeddingsResponse = await this.openAIHandler.createEmbeddingBatch(queryBlockStrings)
 		const embeddings = embeddingsResponse?.data
 		if (!embeddings) {
 			console.error(`Failed to get embeddings for hyde response`)
@@ -165,7 +165,7 @@ export default class VaultChat extends Plugin {
 		}
 		const searchVectors = embeddings.map(e => e.embedding)
 		// search for matches
-		const nearestVectors = this.vectorStore.getNearestVectorsBatch(searchVectors, 8, this.settings.relevanceThreshold)
+		const nearestVectors = this.vectorStore.getNearestVectors(searchVectors, 8, this.settings.relevanceThreshold)
 		const results = await Promise.all(nearestVectors.map(async (nearest, i) => {
 			let name = nearest.path.split('/').last() || ''
 			let contents = nearest.chunk
