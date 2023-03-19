@@ -5,6 +5,9 @@ import { debounce } from 'obsidian'
 import { AskChatGPTModal } from "./AskChatGPTModal";
 import {NearestVectorResult, VectorStore} from "./VectorStore";
 import {SummarizeNoteModal} from "./SummarizeNoteModal";
+import {ChatCompletionRequestMessage} from "openai/api";
+import {ChatCompletionResponseMessageRoleEnum} from "openai";
+import {parseMarkdown} from "./NoteProcesser";
 
 const DEFAULT_SETTINGS: VaultChatSettings = {
 	apiKey: 'OpenAI API key goes here',
@@ -15,16 +18,14 @@ export type SearchResult = {
 	name: string;
 	contents: string;
 }
-
 const isSearchResult = (item: SearchResult | undefined): item is SearchResult => {
 	return !!item
 }
+
+const hydePrompt = "Imagine you are a human and have an Obsidian.md notes vault. Write a note, containing Obsidian.md markdown features, that answers the following question as if you were the human author:"
+
 export default class VaultChat extends Plugin {
 	settings: VaultChatSettings;
-
-	searchTerm: string;
-
-	searchActive = false;
 
 	vectorStore: VectorStore;
 
@@ -66,7 +67,7 @@ export default class VaultChat extends Plugin {
 			id: 'ask-chatgpt',
 			name: 'Ask ChatGPT',
 			callback: () => {
-				new AskChatGPTModal(this.app, this, this.openAIHandler, this.getSearchResultsFiles.bind(this), indexingPromise).open();
+				new AskChatGPTModal(this.app, this, this.openAIHandler, this.askChatGpt.bind(this), indexingPromise).open();
 			}
 		});
 
@@ -137,13 +138,47 @@ export default class VaultChat extends Plugin {
 		return nearest.map(n => n.path)
 	}
 
-	async getSearchResultsFiles(searchTerm: string): Promise<Array<SearchResult>> {
-		const embeddingResponse = await this.openAIHandler.createEmbedding(searchTerm)
-		if (embeddingResponse === undefined) {
-			console.error(`Failed to generate vector for search term.`)
-			return []
+	async loadSettings() {
+		this.settings = Object.assign({}, DEFAULT_SETTINGS, await this.loadData());
+	}
+
+	async saveSettings() {
+		await this.saveData(this.settings);
+		if (this.waitingForApiKey && this.apiKeyIsValid()) {
+			this.waitingForApiKey = false
+			await this.initializePlugin()
 		}
-		const nearestVectors = this.vectorStore.getNearestVectors(embeddingResponse, 8, this.settings.relevanceThreshold)
+	}
+
+	async askChatGpt(question: string) {
+		// HyDE: request note that answers the question
+		const conversation: Array<ChatCompletionRequestMessage> = []
+		const hydeMessage: ChatCompletionRequestMessage = {
+			role: ChatCompletionResponseMessageRoleEnum.User,
+			content: `${hydePrompt} ${question}`,
+		}
+		conversation.push(hydeMessage)
+		const hydeResponse = await this.openAIHandler.createChatCompletion(conversation)
+		if (!hydeResponse || hydeResponse.choices.length === 0 || !hydeResponse.choices[0].message) {
+			console.error(`Failed to get hyde response for query: ${question}`)
+			return
+		}
+
+		// create embeddings for that note and all of its blocks
+		const hydeNote = hydeResponse.choices[0].message.content
+		const hydeNoteBlocks = parseMarkdown(hydeNote, '')
+		const hydeBlocksStrings = hydeNoteBlocks.map(t => `${t.path} ${t.localHeading} ${t.content}`)
+		hydeBlocksStrings.push(hydeNote)
+		hydeBlocksStrings.push(question) // include the users raw question
+		const embeddingsResponse = await this.openAIHandler.createEmbeddingBatch(hydeBlocksStrings)
+		const embeddings = embeddingsResponse?.data
+		if (!embeddings) {
+			console.error(`Failed to get embeddings for hyde response`)
+			return
+		}
+		const searchVectors = embeddings.map(e => e.embedding)
+		// search for matches
+		const nearestVectors = this.vectorStore.getNearestVectorsBatch(searchVectors, 8, this.settings.relevanceThreshold)
 		const results = await Promise.all(nearestVectors.map(async (nearest, i) => {
 			let name = nearest.path.split('/').last() || ''
 			let contents = nearest.chunk
@@ -165,17 +200,5 @@ export default class VaultChat extends Plugin {
 			}
 		}))
 		return results.filter(isSearchResult)
-	}
-
-	async loadSettings() {
-		this.settings = Object.assign({}, DEFAULT_SETTINGS, await this.loadData());
-	}
-
-	async saveSettings() {
-		await this.saveData(this.settings);
-		if (this.waitingForApiKey && this.apiKeyIsValid()) {
-			this.waitingForApiKey = false
-			await this.initializePlugin()
-		}
 	}
 }

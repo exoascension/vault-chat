@@ -281,23 +281,6 @@ export class VectorStore {
 	private chunkFile(fileContents: string, path: string): string[] {
 		const chunkObjects = parseMarkdown(fileContents, path)
 		return chunkObjects.map(c => `${c.path} ${c.localHeading} ${c.content}`)
-		// const messageRequest: ChatCompletionRequestMessage = {
-		// 	role: ChatCompletionRequestMessageRoleEnum.User,
-		// 	content: `I am indexing a file for search.
-		// 	When I search for a term, I want to be able to find the most relevant chunk of content from the file.
-		// 	To do that, I need to first break the file into topical chunks so that I can create embeddings for each chunk.
-		// 	When I search, I will compute the cosine similarity between the chunks and my search term and return chunks that are nearest.
-		// 	Please break the following file into chunks that would suit my use case.
-		// 	When you tell me the chunks you have decided on, include the original content from the file. Do not summarize.
-		// 	Prefix each chunk with "<<<CHUNK START>>>" so that I know where they begin. Here is the file:
-		// 	${fileContents}`
-		// }
-		// const response = await this.createCompletion([messageRequest])
-		// if (!response) {
-		// 	console.error('failed to get completion for chunks')
-		// 	return undefined
-		// }
-		// return response.choices[0].message?.content.split('<<<CHUNK START>>>').filter(t => t !== '\n\n' && t.trim().length !== 0).map(t => t.trim())
 	}
 
 	private async saveEmbeddingsToDatabaseFile() {
@@ -337,6 +320,54 @@ export class VectorStore {
 			fileEntry.chunks.forEach(chunk => {
 				if (chunk.embedding && chunk.embedding.length) {
 					const chunkSimilarity = similarity(searchVector, chunk.embedding)
+					nearestVectors.push({
+						path: filePath,
+						chunk: chunk.contents,
+						similarity: chunkSimilarity
+					})
+				}
+			})
+		}
+
+		nearestVectors.sort((a, b) => {
+			const aEmbedding = a.similarity
+			const bEmbedding = b.similarity
+			return aEmbedding > bEmbedding ? -1: 1
+		})
+
+		return nearestVectors
+			.splice(0, resultNumber)
+			.filter(e => e.similarity > relevanceThreshold)
+	}
+
+	private similarityBatch(searchVectors: Vector[], possibleMatch: Vector): number {
+		let highestSimilarity = similarity(searchVectors.first(), possibleMatch)
+		for (const searchVector of searchVectors) {
+			const currentSimilarity = similarity(searchVector, possibleMatch)
+			if (currentSimilarity > highestSimilarity) {
+				highestSimilarity = currentSimilarity
+			}
+		}
+		return highestSimilarity
+	}
+
+	getNearestVectorsBatch(searchVectors: Vector[], resultNumber: number, relevanceThreshold: number): NearestVectorResult[] {
+		const nearestVectors: NearestVectorResult[] = []
+
+		for (const entry of this.embeddings.entries()) {
+			const filePath = entry[0]
+			const fileEntry = entry[1]
+			if (fileEntry.embedding && fileEntry.embedding.length) {
+				const fileSimilarity = this.similarityBatch(searchVectors, fileEntry.embedding)
+				nearestVectors.push({
+					path: filePath,
+					chunk: undefined,
+					similarity: fileSimilarity
+				})
+			}
+			fileEntry.chunks.forEach(chunk => {
+				if (chunk.embedding && chunk.embedding.length) {
+					const chunkSimilarity = this.similarityBatch(searchVectors, chunk.embedding)
 					nearestVectors.push({
 						path: filePath,
 						chunk: chunk.contents,
