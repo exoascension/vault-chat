@@ -303,43 +303,6 @@ export class VectorStore {
 		return new Map(dbFile.embeddings)
 	}
 
-	getNearestVectors(searchVector: Vector, resultNumber: number, relevanceThreshold: number): NearestVectorResult[] {
-		const nearestVectors: NearestVectorResult[] = []
-
-		for (const entry of this.embeddings.entries()) {
-			const filePath = entry[0]
-			const fileEntry = entry[1]
-			if (fileEntry.embedding && fileEntry.embedding.length) {
-				const fileSimilarity = similarity(searchVector, fileEntry.embedding)
-				nearestVectors.push({
-					path: filePath,
-					chunk: undefined,
-					similarity: fileSimilarity
-				})
-			}
-			fileEntry.chunks.forEach(chunk => {
-				if (chunk.embedding && chunk.embedding.length) {
-					const chunkSimilarity = similarity(searchVector, chunk.embedding)
-					nearestVectors.push({
-						path: filePath,
-						chunk: chunk.contents,
-						similarity: chunkSimilarity
-					})
-				}
-			})
-		}
-
-		nearestVectors.sort((a, b) => {
-			const aEmbedding = a.similarity
-			const bEmbedding = b.similarity
-			return aEmbedding > bEmbedding ? -1: 1
-		})
-
-		return nearestVectors
-			.splice(0, resultNumber)
-			.filter(e => e.similarity > relevanceThreshold)
-	}
-
 	private similarityBatch(searchVectors: Vector[], possibleMatch: Vector): number {
 		let highestSimilarity = similarity(searchVectors.first(), possibleMatch)
 		for (const searchVector of searchVectors) {

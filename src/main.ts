@@ -125,19 +125,6 @@ export default class VaultChat extends Plugin {
 	onunload() {
 	}
 
-	async searchForTerm(searchTerm: string): Promise<Array<string>> {
-		if (searchTerm === '') {
-			return []
-		}
-		const embedding = await this.openAIHandler.createEmbedding(searchTerm)
-		if (embedding === undefined) {
-			console.error(`Failed to generate vector for search term.`)
-			return []
-		}
-		const nearest: NearestVectorResult[] = this.vectorStore.getNearestVectors(embedding, 3, this.settings.relevanceThreshold)
-		return nearest.map(n => n.path)
-	}
-
 	async loadSettings() {
 		this.settings = Object.assign({}, DEFAULT_SETTINGS, await this.loadData());
 	}
