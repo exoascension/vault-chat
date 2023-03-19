@@ -12,9 +12,9 @@ export class AskChatGPTModal extends Modal {
 	openAIHandler: OpenAIHandler;
 	getSearchResultsFiles: (searchTerm: string) => Promise<Array<SearchResult>>;
 
-	isIndexingComplete: Promise<boolean>
+	isIndexingComplete: Promise<void>
 
-	constructor(app: App, plugin: VaultChat, openAIHandler: OpenAIHandler, getSearchResultsFiles: (searchTerm: string) => Promise<Array<SearchResult>>, isIndexingComplete: Promise<boolean>) {
+	constructor(app: App, plugin: VaultChat, openAIHandler: OpenAIHandler, getSearchResultsFiles: (searchTerm: string) => Promise<Array<SearchResult>>, isIndexingComplete: Promise<void>) {
 		super(app);
 		this.plugin = plugin;
 		this.openAIHandler = openAIHandler;
