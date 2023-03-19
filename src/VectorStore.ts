@@ -9,21 +9,18 @@ import {
 import similarity from 'compute-cosine-similarity';
 import {CreateEmbeddingResponse} from "openai";
 
-type Vector = Array<number>
+export type Vector = Array<number>
 type Chunk = {
 	contents: string;
-	embedding: Vector;
+	embedding: Vector | undefined;
 }
 type FileEntry = {
-	eTs: number;
-	mTs: number;
 	md5hash: string;
-	fileEmbedding: Vector;
+	embedding: Vector;
 	chunks: Array<Chunk>;
 }
 type DatabaseFile = {
 	version: number;
-	mTs: number;
 	embeddings: [string, FileEntry][];
 }
 export type NearestVectorResult = {
@@ -37,7 +34,6 @@ type FileEntryUpdate = {
 	hash: string | undefined;
 	contents: string;
 	embedding: Vector | undefined;
-	mTs: number | undefined;
 }
 type CreateEmbeddingFunction = (textsToEmbed: string[]) => Promise<CreateEmbeddingResponse | undefined>
 type CreateCompletionFunction = (messages: Array<ChatCompletionRequestMessage>) => Promise<CreateChatCompletionResponse | undefined>
@@ -61,25 +57,111 @@ export class VectorStore {
 	}
 
 	async updateDatabase(latestFiles: TFile[]) {
-		const oldEmbeddings: Map<string, FileEntry> = new Map(
-			JSON.parse(
-				JSON.stringify(Array.from(this.embeddings))
-			)
-		);
-		const entriesToUpdate: FileEntryUpdate[] = []
+		const newEmbeddings: Map<string, FileEntry> = new Map()
+
+		// get list of files that are new or have changed
+		const filesToUpdate: {file: TFile, contents: string, hash: string, embedding: Vector | undefined }[] = []
 		for (const file of latestFiles) {
-			const oldFileEntry = oldEmbeddings.get(file.path)
+			const oldFileEntry = this.embeddings.get(file.path)
 			const fileContents = await this.vault.read(file)
 			const newHash = this.generateMd5Hash(fileContents)
-			if ((oldFileEntry && newHash !== oldFileEntry.md5hash) || // EXISTING FILE IN DB TO BE UPDATED
-				!oldFileEntry) { // NEW FILE IN DB TO BE ADDED
-				const entries = await this.getEntriesToUpdate(file, newHash, fileContents)
-				entriesToUpdate.concat(entries)
+			if (!oldFileEntry || // new file to add to the database
+				newHash !== oldFileEntry.md5hash || // existing file has changed since last index
+				(fileContents.length > 0 && oldFileEntry.chunks.length === 0) || // breaking into chunks previously failed
+				oldFileEntry.chunks.find(c => c.embedding === undefined)) { // embeddings on chunks previously failed
+				filesToUpdate.push({
+					file: file,
+					contents: fileContents,
+					hash: newHash,
+					embedding: undefined
+				})
+			} else { // existing files that haven't changed
+				newEmbeddings.set(file.path, oldFileEntry)
 			}
 		}
-		const newEmbeddings = await this.convertEntriesToEmbeddingsMap(entriesToUpdate)
-		if (newEmbeddings !== undefined) {
-			this.embeddings = newEmbeddings
+
+		// save the unchanged entries to the db
+		this.embeddings = newEmbeddings
+		await this.saveEmbeddingsToDatabaseFile()
+
+		// create embeddings for the full files first (50 at a time)
+		const chunksOfFilesToUpdate: {file: TFile, contents: string, hash: string, embedding: Vector | undefined }[][] = this.chunkArray(filesToUpdate, 50)
+		for (const chunk of chunksOfFilesToUpdate) {
+			const embeddingRequestTexts = chunk.map(fileToUpdate => `${fileToUpdate.file.path} ${fileToUpdate.contents}`)
+			const response = await this.createEmbeddingBatch(embeddingRequestTexts)
+			if (!response) {
+				console.error(`embedding didn't work! - failing indexing completely for that`)
+				return
+			}
+			response.data.forEach(embeddingResponse => {
+				chunk[embeddingResponse.index].embedding = embeddingResponse.embedding
+			})
+		}
+
+		// save the updated files with file-level embeddings to the db
+		chunksOfFilesToUpdate.forEach(chunk => chunk.forEach(fileToUpdate => {
+			if (fileToUpdate.embedding && fileToUpdate.embedding.length) {
+				newEmbeddings.set(fileToUpdate.file.path, {
+					md5hash: fileToUpdate.hash,
+					embedding: fileToUpdate.embedding,
+					chunks: []
+				})
+			}
+		}))
+		this.embeddings = newEmbeddings
+		await this.saveEmbeddingsToDatabaseFile()
+
+		// use completions to chunk the updated files, then create embeddings, and save (19 at a time)
+		const chunksOfFilesToChunk: {file: TFile, contents: string, hash: string, embedding: Vector | undefined }[][]
+			= this.chunkArray(filesToUpdate, 19)
+		for (const chunk of chunksOfFilesToChunk) {
+			const chunksToCreateEmbeddingsOf: { path: string, embedding: Vector | undefined, contents: string}[] = []
+			for (const fileToChunk of chunk) {
+				if (!fileToChunk.contents || fileToChunk.contents.length === 0) {
+					continue // no need to chunk and empty file
+				}
+				const chunksOfFile = await this.chunkFile(fileToChunk.contents)
+				if (chunksOfFile === undefined) {
+					console.warn(`Something went wrong with block level embeddings, skipping ${fileToChunk.file.path} `)
+					continue
+				}
+				const entry = this.embeddings.get(fileToChunk.file.path)
+				if (entry) {
+					entry.chunks = chunksOfFile.map(c => ({
+						contents: c,
+						embedding: undefined
+					}))
+					await this.saveEmbeddingsToDatabaseFile()
+				}
+				chunksOfFile.forEach(chunkOfFile => {
+					chunksToCreateEmbeddingsOf.push({
+						path: fileToChunk.file.path,
+						contents: chunkOfFile,
+						embedding: undefined
+					})
+				})
+			}
+			const embeddingRequestTexts = chunksToCreateEmbeddingsOf.map(chunk => chunk.contents)
+			const response = await this.createEmbeddingBatch(embeddingRequestTexts)
+			if (!response) {
+				console.warn(`Something went wrong with block level embeddings, 
+				skipping entire chunk ${JSON.stringify(chunksToCreateEmbeddingsOf.map(chunk => chunk.path))}`)
+				return
+			}
+			response.data.forEach(embeddingResponse => {
+				chunksToCreateEmbeddingsOf[embeddingResponse.index].embedding = embeddingResponse.embedding
+			})
+			const chunksByPath = this.groupBy(chunksToCreateEmbeddingsOf, 'path')
+			chunksByPath.forEach(chunkByPath => {
+				const path = chunkByPath[0].path
+				const entry = this.embeddings.get(path)
+				if (entry) {
+					entry.chunks = chunkByPath.map(c => ({
+						contents: c.contents,
+						embedding: c.embedding
+					}))
+				}
+			})
 			await this.saveEmbeddingsToDatabaseFile()
 		}
 	}
@@ -91,8 +173,7 @@ export class VectorStore {
 			chunk: false,
 			hash: newHash,
 			contents: fileContents,
-			embedding: undefined,
-			mTs: file.stat.mtime
+			embedding: undefined
 		})
 		const chunks = fileContents.length > 0 ? await this.chunkFile(fileContents) : [] // todo empty files?
 		if (!chunks) {
@@ -106,8 +187,7 @@ export class VectorStore {
 				chunk: true,
 				hash: undefined,
 				contents: chunk,
-				embedding: undefined,
-				mTs: undefined
+				embedding: undefined
 			})
 		})
 		return entriesToUpdate
@@ -142,7 +222,7 @@ export class VectorStore {
 		const entriesByPath: FileEntryUpdate[][] = this.groupBy(entriesToUpdate, 'path')
 		for (const entries of entriesByPath) {
 			const file = entries.find(x => !x.chunk)
-			if (!file || !file.mTs || !file.hash || !file.embedding) {
+			if (!file || !file.hash || !file.embedding) {
 				console.warn('something weird happened with this entry - skipping it') // todo
 				continue
 			}
@@ -152,10 +232,8 @@ export class VectorStore {
 				embedding: c.embedding! // cant be null since we filter first
 			}))
 			const fileEntry: FileEntry = {
-				eTs: Date.now(),
-				mTs: file.mTs,
 				md5hash: file.hash,
-				fileEmbedding: file.embedding,
+				embedding: file.embedding,
 				chunks: chunks
 			}
 			newEmbeddings.set(file.path, fileEntry)
@@ -221,14 +299,13 @@ export class VectorStore {
 			console.error('failed to get completion for chunks')
 			return undefined
 		}
-		return response.choices[0].message?.content.split('<<<CHUNK START>>>').filter(t => t !== '\n\n').map(t => t.trim())
+		return response.choices[0].message?.content.split('<<<CHUNK START>>>').filter(t => t !== '\n\n' && t.trim().length !== 0).map(t => t.trim())
 	}
 
 	private async saveEmbeddingsToDatabaseFile() {
 		const fileSystemAdapter = this.vault.adapter
 		const dbFile: DatabaseFile = {
 			version: 2,
-			mTs: Date.now(),
 			embeddings: Array.from(this.embeddings.entries())
 		}
 		await fileSystemAdapter.write(this.dbFilePath, JSON.stringify(dbFile))
@@ -251,19 +328,23 @@ export class VectorStore {
 		for (const entry of this.embeddings.entries()) {
 			const filePath = entry[0]
 			const fileEntry = entry[1]
-			const fileSimilarity = similarity(searchVector, fileEntry.fileEmbedding)
-			nearestVectors.push({
-				path: filePath,
-				chunk: undefined,
-				similarity: fileSimilarity
-			})
-			fileEntry.chunks.forEach(chunk => {
-				const chunkSimilarity = similarity(searchVector, chunk.embedding)
+			if (fileEntry.embedding && fileEntry.embedding.length) {
+				const fileSimilarity = similarity(searchVector, fileEntry.embedding)
 				nearestVectors.push({
 					path: filePath,
-					chunk: chunk.contents,
-					similarity: chunkSimilarity
+					chunk: undefined,
+					similarity: fileSimilarity
 				})
+			}
+			fileEntry.chunks.forEach(chunk => {
+				if (chunk.embedding && chunk.embedding.length) {
+					const chunkSimilarity = similarity(searchVector, chunk.embedding)
+					nearestVectors.push({
+						path: filePath,
+						chunk: chunk.contents,
+						similarity: chunkSimilarity
+					})
+				}
 			})
 		}
 
@@ -283,5 +364,20 @@ export class VectorStore {
 			(prev[cur[key]] = prev[cur[key]] || []).push(cur);
 			return prev;
 		}, {}))
+	}
+
+	// https://stackoverflow.com/questions/8495687/split-array-into-chunks
+	private chunkArray(inputArray: any[], chunk: number) {
+		return inputArray.reduce((resultArray, item, index) => {
+			const chunkIndex = Math.floor(index/chunk)
+
+			if(!resultArray[chunkIndex]) {
+				resultArray[chunkIndex] = [] // start a new chunk
+			}
+
+			resultArray[chunkIndex].push(item)
+
+			return resultArray
+		}, [])
 	}
 }
