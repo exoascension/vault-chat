@@ -143,7 +143,7 @@ export default class VaultChat extends Plugin {
 			console.error(`Failed to generate vector for search term.`)
 			return []
 		}
-		const nearestVectors = this.vectorStore.getNearestVectors(embeddingResponse, 3, this.settings.relevanceThreshold)
+		const nearestVectors = this.vectorStore.getNearestVectors(embeddingResponse, 8, this.settings.relevanceThreshold)
 		const results = await Promise.all(nearestVectors.map(async (nearest, i) => {
 			let name = nearest.path.split('/').last() || ''
 			let contents = nearest.chunk

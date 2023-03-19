@@ -1,13 +1,16 @@
 import {TFile, Vault} from 'obsidian';
 import {Md5} from 'ts-md5';
+import GPT3Tokenizer from "gpt3-tokenizer";
 import {
 	ChatCompletionRequestMessage,
-	ChatCompletionRequestMessageRoleEnum,
 	CreateChatCompletionResponse
 } from 'openai/api';
 // @ts-ignore
 import similarity from 'compute-cosine-similarity';
 import {CreateEmbeddingResponse} from "openai";
+import {parseMarkdown} from "./NoteProcesser";
+import {Throttler} from "./Throttler";
+
 
 export type Vector = Array<number>
 type Chunk = {
@@ -45,11 +48,16 @@ export class VectorStore {
 	private vault: Vault
 	private readonly createEmbeddingBatch: CreateEmbeddingFunction
 	private readonly createCompletion: CreateCompletionFunction
-
+	private tokenizer: GPT3Tokenizer
+	private throttler = new Throttler({
+		tokensPerInterval: 20,
+		interval: "minute"
+	})
 	constructor(vault: Vault, createEmbeddingBatch: CreateEmbeddingFunction, createCompletion: CreateCompletionFunction) {
 		this.vault = vault
-		this.createEmbeddingBatch = createEmbeddingBatch
+		this.createEmbeddingBatch = (textsToEmbed) => this.throttler.throttleCall(() => createEmbeddingBatch(textsToEmbed))
 		this.createCompletion = createCompletion
+		this.tokenizer = new GPT3Tokenizer({ type: "gpt3" })
 	}
 
 	async initDatabase() {
@@ -111,59 +119,47 @@ export class VectorStore {
 		this.embeddings = newEmbeddings
 		await this.saveEmbeddingsToDatabaseFile()
 
-		// use completions to chunk the updated files, then create embeddings, and save (19 at a time)
-		const chunksOfFilesToChunk: {file: TFile, contents: string, hash: string, embedding: Vector | undefined }[][]
-			= this.chunkArray(filesToUpdate, 19)
-		for (const chunk of chunksOfFilesToChunk) {
-			const chunksToCreateEmbeddingsOf: { path: string, embedding: Vector | undefined, contents: string}[] = []
-			for (const fileToChunk of chunk) {
-				if (!fileToChunk.contents || fileToChunk.contents.length === 0) {
-					continue // no need to chunk and empty file
-				}
-				const chunksOfFile = await this.chunkFile(fileToChunk.contents)
-				if (chunksOfFile === undefined) {
-					console.warn(`Something went wrong with block level embeddings, skipping ${fileToChunk.file.path} `)
-					continue
-				}
-				const entry = this.embeddings.get(fileToChunk.file.path)
-				if (entry) {
-					entry.chunks = chunksOfFile.map(c => ({
-						contents: c,
-						embedding: undefined
-					}))
-					await this.saveEmbeddingsToDatabaseFile()
-				}
-				chunksOfFile.forEach(chunkOfFile => {
-					chunksToCreateEmbeddingsOf.push({
-						path: fileToChunk.file.path,
-						contents: chunkOfFile,
-						embedding: undefined
-					})
+		const chunksToEmbed: {path: string, content: string, embedding: Vector | undefined}[] = []
+		filesToUpdate.forEach(fileToUpdate => {
+			const chunks = this.chunkFile(fileToUpdate.contents, fileToUpdate.file.path)
+			chunks.forEach(c => {
+				chunksToEmbed.push({
+					path: fileToUpdate.file.path,
+					content: c,
+					embedding: undefined
 				})
-			}
-			const embeddingRequestTexts = chunksToCreateEmbeddingsOf.map(chunk => chunk.contents)
-			const response = await this.createEmbeddingBatch(embeddingRequestTexts)
-			if (!response) {
-				console.warn(`Something went wrong with block level embeddings, 
-				skipping entire chunk ${JSON.stringify(chunksToCreateEmbeddingsOf.map(chunk => chunk.path))}`)
-				return
-			}
-			response.data.forEach(embeddingResponse => {
-				chunksToCreateEmbeddingsOf[embeddingResponse.index].embedding = embeddingResponse.embedding
 			})
-			const chunksByPath = this.groupBy(chunksToCreateEmbeddingsOf, 'path')
-			chunksByPath.forEach(chunkByPath => {
-				const path = chunkByPath[0].path
-				const entry = this.embeddings.get(path)
-				if (entry) {
-					entry.chunks = chunkByPath.map(c => ({
-						contents: c.contents,
-						embedding: c.embedding
-					}))
-				}
+		})
+
+		const chunksToEmbedRequestBatches: {path: string, content: string, embedding: Vector | undefined}[][] = this.batchArrayByTokenCount(chunksToEmbed, 7500)
+		console.debug('Made the following batches for embedding')
+		console.debug(chunksToEmbedRequestBatches)
+		for (const batch of chunksToEmbedRequestBatches) {
+			const batchStrings = batch.map(b => b.content)
+			console.debug('making request of this batch')
+			console.debug(batch)
+			const batchEmbedResponse = await this.createEmbeddingBatch(batchStrings)
+			if (!batchEmbedResponse) {
+				console.log(`batch embed response failed skipping batch`)
+				continue
+			}
+			batchEmbedResponse.data.forEach(embeddingResponse => {
+				batch[embeddingResponse.index].embedding = embeddingResponse.embedding
 			})
-			await this.saveEmbeddingsToDatabaseFile()
 		}
+		const chunksWithEmbeddings = chunksToEmbedRequestBatches.flatMap(x => x)
+		const chunksByPath = this.groupBy(chunksWithEmbeddings, 'path')
+		chunksByPath.forEach(chunkByPath => {
+			const path = chunkByPath[0].path
+			const entry = this.embeddings.get(path)
+			if (entry) {
+				entry.chunks = chunkByPath.map(c => ({
+					contents: c.contents,
+					embedding: c.embedding
+				}))
+			}
+		})
+		await this.saveEmbeddingsToDatabaseFile()
 	}
 
 	private async getEntriesToUpdate(file: TFile, newHash: string, fileContents: string): Promise<FileEntryUpdate[]> {
@@ -175,7 +171,7 @@ export class VectorStore {
 			contents: fileContents,
 			embedding: undefined
 		})
-		const chunks = fileContents.length > 0 ? await this.chunkFile(fileContents) : [] // todo empty files?
+		const chunks = fileContents.length > 0 ? this.chunkFile(fileContents, file.path) : [] // todo empty files?
 		if (!chunks) {
 			console.error('failed to get chunks from file - file entry failing - lets skip it for now')
 			// todo should maybe track failed files
@@ -282,24 +278,26 @@ export class VectorStore {
 		return Md5.hashStr(content)
 	}
 
-	private async chunkFile(fileContents: string): Promise<string[] | undefined> {
-		const messageRequest: ChatCompletionRequestMessage = {
-			role: ChatCompletionRequestMessageRoleEnum.User,
-			content: `I am indexing a file for search. 
-			When I search for a term, I want to be able to find the most relevant chunk of content from the file. 
-			To do that, I need to first break the file into topical chunks so that I can create embeddings for each chunk. 
-			When I search, I will compute the cosine similarity between the chunks and my search term and return chunks that are nearest. 
-			Please break the following file into chunks that would suit my use case. 
-			When you tell me the chunks you have decided on, include the original content from the file. Do not summarize. 
-			Prefix each chunk with "<<<CHUNK START>>>" so that I know where they begin. Here is the file:
-			${fileContents}`
-		}
-		const response = await this.createCompletion([messageRequest])
-		if (!response) {
-			console.error('failed to get completion for chunks')
-			return undefined
-		}
-		return response.choices[0].message?.content.split('<<<CHUNK START>>>').filter(t => t !== '\n\n' && t.trim().length !== 0).map(t => t.trim())
+	private chunkFile(fileContents: string, path: string): string[] {
+		const chunkObjects = parseMarkdown(fileContents, path)
+		return chunkObjects.map(c => `${c.path} ${c.localHeading} ${c.content}`)
+		// const messageRequest: ChatCompletionRequestMessage = {
+		// 	role: ChatCompletionRequestMessageRoleEnum.User,
+		// 	content: `I am indexing a file for search.
+		// 	When I search for a term, I want to be able to find the most relevant chunk of content from the file.
+		// 	To do that, I need to first break the file into topical chunks so that I can create embeddings for each chunk.
+		// 	When I search, I will compute the cosine similarity between the chunks and my search term and return chunks that are nearest.
+		// 	Please break the following file into chunks that would suit my use case.
+		// 	When you tell me the chunks you have decided on, include the original content from the file. Do not summarize.
+		// 	Prefix each chunk with "<<<CHUNK START>>>" so that I know where they begin. Here is the file:
+		// 	${fileContents}`
+		// }
+		// const response = await this.createCompletion([messageRequest])
+		// if (!response) {
+		// 	console.error('failed to get completion for chunks')
+		// 	return undefined
+		// }
+		// return response.choices[0].message?.content.split('<<<CHUNK START>>>').filter(t => t !== '\n\n' && t.trim().length !== 0).map(t => t.trim())
 	}
 
 	private async saveEmbeddingsToDatabaseFile() {
@@ -379,5 +377,24 @@ export class VectorStore {
 
 			return resultArray
 		}, [])
+	}
+
+	private batchArrayByTokenCount(chunks: {path: string, content: string, embedding: Vector | undefined}[], tokensPerBatch: number): {path: string, content: string, embedding: Vector | undefined}[][] {
+		const batches: {path: string, content: string, embedding: Vector | undefined}[][] = []
+		let batch: {path: string, content: string, embedding: Vector | undefined}[] = []
+		let currentTokenCount = 0
+		for (const chunk of chunks) {
+			const tokenCount = this.tokenizer.encode(chunk.content).bpe.length
+			const newTokenCount = currentTokenCount + tokenCount
+			if (newTokenCount > tokensPerBatch) {
+				batches.push(batch)
+				batch = []
+				currentTokenCount = 0
+			} else {
+				batch.push(chunk)
+				currentTokenCount = newTokenCount
+			}
+		}
+		return batches
 	}
 }

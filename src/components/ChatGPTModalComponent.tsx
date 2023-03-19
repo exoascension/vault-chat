@@ -50,7 +50,7 @@ export const ChatGPTModalComponent: React.FC<Props> = (props: Props) => {
 
 		const systemMessageForContext: ChatCompletionRequestMessage = {
 			role: 'system',
-			content: `Imagine the following texts were written by me and represent my own opinions.   
+			content: `Imagine the following texts were written by me and represent my own opinions. When I ask you as question, use the texts to inform your answers. Start your answers with "Based on your notes..."   
 			${searchResults.map((result: SearchResult) => `${result.name}: ${result.contents}`).join('\n')}`
 		}
 		newInternalConversation.push(systemMessageForContext)
