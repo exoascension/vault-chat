@@ -8,7 +8,7 @@ import {
 // @ts-ignore
 import similarity from 'compute-cosine-similarity';
 import {CreateEmbeddingResponse} from "openai";
-import {parseMarkdown} from "./NoteProcesser";
+import {MarkdownChunk, parseMarkdown} from "./NoteProcesser";
 import {Throttler} from "./Throttler";
 
 
@@ -279,7 +279,7 @@ export class VectorStore {
 	}
 
 	private chunkFile(fileContents: string, path: string): string[] {
-		const chunkObjects = parseMarkdown(fileContents, path)
+		const chunkObjects: MarkdownChunk[] = parseMarkdown(fileContents, path)
 		return chunkObjects.map(c => `${c.path} ${c.localHeading} ${c.content}`)
 	}
 

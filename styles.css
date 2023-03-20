@@ -73,3 +73,43 @@ If your plugin does not need CSS, delete this file.
 	color: var(--text-faint);
 }
 
+.note-chat-container {
+	display: flex;
+	flex-direction: column;
+	height: 100%;
+	position: relative;
+}
+
+.note-chat-header {
+	top: 0;
+	left: 0;
+	right: 0;
+}
+
+.note-chat-footer {
+	margin-bottom: 30px;
+	left: 0;
+	right: 0;
+}
+
+.note-chat-body {
+	flex: 1;
+	overflow-y: auto;
+	padding: 20px;
+}
+
+.chat-box-message-container {
+	position: relative;
+}
+
+.copy-button {
+	display: none;
+	position: absolute;
+	top:0;
+	right:0;
+	padding: 4px
+}
+
+.chat-box-message:hover + .copy-button, .copy-button:hover {
+	display: inline-block;
+}

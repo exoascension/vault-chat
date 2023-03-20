@@ -1,18 +1,25 @@
 // @ts-ignore
 import { Remarkable } from 'remarkable';
 
-export function parseMarkdown(mdContent: string, path: string) {
-	const chunks = [];
+export type MarkdownChunk = {
+	type: string;
+	content: string;
+	path: string;
+	localHeading: string;
+}
+export function parseMarkdown(mdContent: string, path: string): MarkdownChunk[] {
+	const chunks: MarkdownChunk[] = [];
 	const mdParser = new Remarkable();
 	const mdTokens = mdParser.parse(mdContent, {});
 
-	let currentChunk = {
+	let currentChunk: MarkdownChunk = {
 		type: '',
 		content: '',
 		path: path,
 		localHeading: '',
 	};
 
+	// @ts-ignore
 	mdTokens.forEach((token) => {
 		switch (token.type) {
 			case 'heading_open':

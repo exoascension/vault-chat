@@ -6,6 +6,7 @@ import { SearchResult } from "../main";
 import {SaveOptions} from "./SaveOptions";
 import {ChatGPTConversation} from "./ChatGPTConversation";
 import {IndexingNotification} from "./IndexingNotification";
+import {SearchInput} from "./SearchInput";
 
 interface Props {
 	openAIHandler: OpenAIHandler,
@@ -33,13 +34,6 @@ export const ChatGPTModalComponent: React.FC<Props> = (props: Props) => {
 	const userMessageOnChange = (e: { target: { value: React.SetStateAction<string>; }; }) => {
 		setButtonDisabled(e.target.value.length === 0)
 		setUserMessage(e.target.value)
-	}
-
-	// @ts-ignore
-	const handleKeyDown = (e) => {
-		if (e.key === 'Enter') {
-			onClickSubmit()
-		}
 	}
 
 	const onClickSubmit = async () => {
@@ -118,11 +112,8 @@ export const ChatGPTModalComponent: React.FC<Props> = (props: Props) => {
 			{ showIndexingBanner && (
 				<IndexingNotification/>
 			)}
-			<ChatGPTConversation conversation={renderedConversation}/>
-			<div className={'chat-input-layout'}>
-				<input className={'chat-input-input'} type="text" name="user-message" value={userMessage} onChange={userMessageOnChange} onKeyDown={handleKeyDown} disabled={inputDisabled}/>
-				<button className={buttonDisabled ? 'button-disabled' : ''} disabled={buttonDisabled} onClick={onClickSubmit}>Submit</button>
-			</div>
+			<ChatGPTConversation conversation={renderedConversation} className={""}/>
+			<SearchInput className={""} buttonDisabled={buttonDisabled} inputDisabled={inputDisabled} userMessage={userMessage} userMessageOnChange={userMessageOnChange} onClickSubmit={onClickSubmit}/>
 			<SaveOptions
 				conversation={renderedConversation}
 				saveToAndOpenNewNote={saveToAndOpenNewNote}
