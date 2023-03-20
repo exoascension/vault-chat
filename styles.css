@@ -7,11 +7,15 @@ If your plugin does not need CSS, delete this file.
 
 */
 
+.search-results-container {
+	margin-top: var(--size-4-3);
+}
+
 .search-result-card {
 	width: 100%;
 	border: 1px solid var(--background-modifier-border);
 	margin-bottom: var(--size-4-2);
-	color: var(--text-normal);;
+	color: var(--text-normal);
 	font-size: var(--font-ui-smaller);
 	font-family: var(--font-interface);
 	border-radius: var(--radius-s);
@@ -26,6 +30,7 @@ If your plugin does not need CSS, delete this file.
 
 .search-result-card-content {
 	padding: var(--size-2-3);
+	background-color: var(--background-secondary);
 }
 @media (hover: hover) {
 	.search-result-card:hover {

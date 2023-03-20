@@ -2,12 +2,13 @@ import { Plugin, TFile} from 'obsidian';
 import { OpenAIHandler } from "./OpenAIHandler"
 import { VaultChatSettingTab, VaultChatSettings } from './UserSettings';
 import { debounce } from 'obsidian'
-import { AskChatGPTModal } from "./AskChatGPTModal";
-import {NearestVectorResult, VectorStore} from "./VectorStore";
-import {SummarizeNoteModal} from "./SummarizeNoteModal";
+import { AskChatGPTModal } from "./modals/AskChatGPTModal";
+import {VectorStore} from "./VectorStore";
+import {SummarizeNoteModal} from "./modals/SummarizeNoteModal";
 import {ChatCompletionRequestMessage} from "openai/api";
 import {ChatCompletionResponseMessageRoleEnum} from "openai";
 import {parseMarkdown} from "./NoteProcesser";
+import {SemanticSearchModal} from "./modals/SemanticSearchModal";
 
 const DEFAULT_SETTINGS: VaultChatSettings = {
 	apiKey: 'OpenAI API key goes here',
@@ -67,7 +68,7 @@ export default class VaultChat extends Plugin {
 			id: 'ask-chatgpt',
 			name: 'Ask ChatGPT',
 			callback: () => {
-				new AskChatGPTModal(this.app, this, this.openAIHandler, this.askChatGpt.bind(this), indexingPromise).open();
+				new AskChatGPTModal(this.app, this, this.openAIHandler, this.getSearchResults.bind(this), indexingPromise).open();
 			}
 		});
 
@@ -88,6 +89,14 @@ export default class VaultChat extends Plugin {
 				return false
 			}
 		});
+
+		this.addCommand({
+			id: 'semantic-search',
+			name: 'Semantic search',
+			callback: () => {
+				new SemanticSearchModal(this.app, this, this.openAIHandler, this.getSearchResults.bind(this), indexingPromise).open()
+			}
+		})
 
 		this.registerEvent(this.app.vault.on('create', async (file) => {
 			await indexingPromise
@@ -137,17 +146,17 @@ export default class VaultChat extends Plugin {
 		}
 	}
 
-	async askChatGpt(question: string) {
+	async getSearchResults(searchTerm: string) {
 		// HyDE: request note that answers the question https://github.com/texttron/hyde
 		const conversation: Array<ChatCompletionRequestMessage> = []
 		const hydeMessage: ChatCompletionRequestMessage = {
 			role: ChatCompletionResponseMessageRoleEnum.User,
-			content: `${hydePrompt} ${question}`,
+			content: `${hydePrompt} ${searchTerm}`,
 		}
 		conversation.push(hydeMessage)
 		const hydeResponse = await this.openAIHandler.createChatCompletion(conversation)
 		if (!hydeResponse || hydeResponse.choices.length === 0 || !hydeResponse.choices[0].message) {
-			console.error(`Failed to get hyde response for query: ${question}`)
+			console.error(`Failed to get hyde response for query: ${searchTerm}`)
 			return
 		}
 
@@ -156,7 +165,7 @@ export default class VaultChat extends Plugin {
 		const hydeNoteBlocks = parseMarkdown(hydeNote, '')
 		const queryBlockStrings = hydeNoteBlocks.map(t => `${t.path} ${t.localHeading} ${t.content}`)
 		queryBlockStrings.push(hydeNote)
-		queryBlockStrings.push(question) // include the users raw question
+		queryBlockStrings.push(searchTerm) // include the users raw question
 		const embeddingsResponse = await this.openAIHandler.createEmbeddingBatch(queryBlockStrings)
 		const embeddings = embeddingsResponse?.data
 		if (!embeddings) {

@@ -1,36 +1,37 @@
 import {App, Modal} from "obsidian";
-import VaultChat, {SearchResult} from "./main";
+import VaultChat from "../main";
 import * as React from "react";
 import {createRoot, Root} from "react-dom/client";
-import {ChatGPTModalComponent} from "./components/ChatGPTModalComponent";
-import {OpenAIHandler} from "./OpenAIHandler";
+import {OpenAIHandler} from "../OpenAIHandler";
+import {SummarizeNoteModalComponent} from "../components/SummarizeNoteModalComponent";
 
-export class AskChatGPTModal extends Modal {
+export class SummarizeNoteModal extends Modal {
 	plugin: VaultChat;
 	myRoot: Root | undefined;
 
 	openAIHandler: OpenAIHandler;
-	getSearchResultsFiles: (searchTerm: string) => Promise<Array<SearchResult>>;
 
-	isIndexingComplete: Promise<void>
+	fileName: string;
 
-	constructor(app: App, plugin: VaultChat, openAIHandler: OpenAIHandler, getSearchResultsFiles: (searchTerm: string) => Promise<Array<SearchResult>>, isIndexingComplete: Promise<void>) {
+	fileContents: string;
+
+	constructor(app: App, plugin: VaultChat, openAIHandler: OpenAIHandler, fileName: string, fileContents: string) {
 		super(app);
 		this.plugin = plugin;
 		this.openAIHandler = openAIHandler;
-		this.getSearchResultsFiles = getSearchResultsFiles;
-		this.isIndexingComplete = isIndexingComplete;
+		this.fileName = fileName
+		this.fileContents = fileContents
 	}
 
 	onOpen() {
 		this.myRoot = createRoot(this.contentEl)
 		this.myRoot.render(
-			<ChatGPTModalComponent
+			<SummarizeNoteModalComponent
 				openAIHandler={this.openAIHandler}
-				getSearchResultsFiles={this.getSearchResultsFiles}
-				isIndexingComplete={this.isIndexingComplete}
 				saveToAndOpenNewNote={this.saveToAndOpenNewNote.bind(this)}
 				appendToActiveNote={this.appendToActiveNote.bind(this)}
+				fileName={this.fileName}
+				fileContents={this.fileContents}
 			/>
 		)
 	}
@@ -42,9 +43,10 @@ export class AskChatGPTModal extends Modal {
 	}
 
 	async saveToAndOpenNewNote(text: string) {
+		const summaryTitle = this.fileName.substring(0, this.fileName.length-3)
 		const noteRandomId = Math.floor(Math.random() * (100000 - 1) + 1);
 		const dateTime = (new Date().toISOString().split('T')[0])
-		const newNote = await this.app.vault.create(`/VaultChat-${dateTime}-${noteRandomId}.md`, text)
+		const newNote = await this.app.vault.create(`/${summaryTitle}-VaultChat-Summary-${dateTime}-${noteRandomId}.md`, text)
 		await this.app.workspace.getLeaf().openFile(newNote)
 		this.app.workspace.activeEditor?.editor?.scrollTo(this.app.workspace.activeEditor?.editor?.lastLine())
 		this.app.workspace.activeEditor?.editor?.focus()
@@ -53,7 +55,7 @@ export class AskChatGPTModal extends Modal {
 
 	async appendToActiveNote(text: string) {
 		const currentVal = this.app.workspace.activeEditor?.editor?.getValue()
-		this.app.workspace.activeEditor?.editor?.setValue(`${currentVal}\n\n${text}`)
+		this.app.workspace.activeEditor?.editor?.setValue(`${currentVal} \n\n ${text}`)
 		this.app.workspace.activeEditor?.editor?.scrollTo(this.app.workspace.activeEditor?.editor?.lastLine())
 		this.app.workspace.activeEditor?.editor?.focus()
 		this.close()
