@@ -8,7 +8,7 @@ interface Props {
 	openAIHandler: OpenAIHandler,
 	getSearchResultsFiles: (searchTerm: string) => Promise<Array<SearchResult>>,
 
-	isIndexingComplete: Promise<boolean>,
+	isIndexingComplete: Promise<void>,
 
 	openFile: (searchResult: SearchResult) => Promise<void>
 }
@@ -50,8 +50,9 @@ export const SemanticSearchModalComponent: React.FC<Props> = (props: Props) => {
 		<>
 			<h1>Semantic Search</h1>
 			<p>
-				Semantic Search means to search by meaning, rather than text matches. For example,
-				a note about hamburgers may be a search result if you are searching "food".
+				Semantic Search means to search by meaning, rather than text matches. Results may vary and the
+				accuracy of results depends on factors such as the contents and structure of your vault as well as
+				the specificity of your search term.
 			</p>
 			{ showIndexingBanner && (
 				<IndexingNotification/>

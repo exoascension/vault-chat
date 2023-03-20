@@ -12,9 +12,9 @@ export class AskChatGPTModal extends Modal {
 	openAIHandler: OpenAIHandler;
 	getSearchResultsFiles: (searchTerm: string) => Promise<Array<SearchResult>>;
 
-	isIndexingComplete: Promise<boolean>;
+	isIndexingComplete: Promise<void>
 
-	constructor(app: App, plugin: VaultChat, openAIHandler: OpenAIHandler, getSearchResultsFiles: (searchTerm: string) => Promise<Array<SearchResult>>, isIndexingComplete: Promise<boolean>) {
+	constructor(app: App, plugin: VaultChat, openAIHandler: OpenAIHandler, getSearchResultsFiles: (searchTerm: string) => Promise<Array<SearchResult>>, isIndexingComplete: Promise<void>) {
 		super(app);
 		this.plugin = plugin;
 		this.openAIHandler = openAIHandler;
@@ -43,7 +43,8 @@ export class AskChatGPTModal extends Modal {
 
 	async saveToAndOpenNewNote(text: string) {
 		const noteRandomId = Math.floor(Math.random() * (100000 - 1) + 1);
-		const newNote = await this.app.vault.create(`/vaultchat-${noteRandomId}.md`, text)
+		const dateTime = (new Date().toISOString().split('T')[0])
+		const newNote = await this.app.vault.create(`/VaultChat-${dateTime}-${noteRandomId}.md`, text)
 		await this.app.workspace.getLeaf().openFile(newNote)
 		this.app.workspace.activeEditor?.editor?.scrollTo(this.app.workspace.activeEditor?.editor?.lastLine())
 		this.app.workspace.activeEditor?.editor?.focus()
@@ -58,5 +59,3 @@ export class AskChatGPTModal extends Modal {
 		this.close()
 	}
 }
-
-

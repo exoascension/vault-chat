@@ -1,7 +1,7 @@
 import * as React from "react";
 import { useState } from "react";
 import { OpenAIHandler } from "../OpenAIHandler";
-import { ChatCompletionRequestMessage } from "openai/api";
+import {ChatCompletionRequestMessage, ChatCompletionRequestMessageRoleEnum} from "openai/api";
 import { SearchResult } from "../main";
 import {SaveOptions} from "./SaveOptions";
 import {ChatGPTConversation} from "./ChatGPTConversation";
@@ -11,7 +11,7 @@ interface Props {
 	openAIHandler: OpenAIHandler,
 	getSearchResultsFiles: (searchTerm: string) => Promise<Array<SearchResult>>,
 
-	isIndexingComplete: Promise<boolean>,
+	isIndexingComplete: Promise<void>,
 
 	saveToAndOpenNewNote: (text: string) => never,
 
@@ -50,7 +50,7 @@ export const ChatGPTModalComponent: React.FC<Props> = (props: Props) => {
 
 		const systemMessageForContext: ChatCompletionRequestMessage = {
 			role: 'system',
-			content: `Imagine the following texts were written by me and represent my own opinions.   
+			content: `Imagine the following texts were written by me and represent my own opinions. When I ask you as question, use the texts to inform your answers. Start your answers with "Based on your notes..."   
 			${searchResults.map((result: SearchResult) => `${result.name}: ${result.contents}`).join('\n')}`
 		}
 		newInternalConversation.push(systemMessageForContext)
@@ -63,6 +63,20 @@ export const ChatGPTModalComponent: React.FC<Props> = (props: Props) => {
 		setInputDisabled(true)
 
 		const response = await openAIHandler.createChatCompletion(newInternalConversation)
+		if (!response) {
+			// don't show system messages to the user
+			const newRenderedConversation = newInternalConversation.filter(
+				message => message.role !== ChatCompletionRequestMessageRoleEnum.System)
+			newRenderedConversation.push({
+				role: ChatCompletionRequestMessageRoleEnum.Assistant,
+				content: `I've encountered an error and cannot complete your request`
+			})
+			setInternalConversation(newInternalConversation)
+			setRenderedConversation(newRenderedConversation)
+			setUserMessage('')
+			setInputDisabled(false)
+			return
+		}
 
 		// be mindful of the 4096 token limit and remove some old context if we're getting close
 		const responseTokensTotal = response.usage?.total_tokens
