@@ -272,6 +272,7 @@ export class VectorStore {
 	}
 
 	async deleteFileByPath(filePath: string) {
+		console.log("Merro 1")
 		this.embeddings.delete(filePath)
 		await this.debounceSave()
 	}

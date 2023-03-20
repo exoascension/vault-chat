@@ -13,7 +13,8 @@ import {NoteChatView, NOTE_CHAT_VIEW} from "./NoteChatView";
 
 const DEFAULT_SETTINGS: VaultChatSettings = {
 	apiKey: 'OpenAI API key goes here',
-	relevanceThreshold: 0.01
+	relevanceThreshold: 0.01,
+	exclusionPath: "fake-sensitive-folder/"
 }
 
 export type SearchResult = {
@@ -52,11 +53,29 @@ export default class VaultChat extends Plugin {
 		}
 	}
 
-	apiKeyIsValid() {
+	private apiKeyIsValid() {
 		return this.settings.apiKey
 			&& this.settings.apiKey !== ''
 			&& this.settings.apiKey !== DEFAULT_SETTINGS.apiKey
 			&& this.settings.apiKey.length > 30
+	}
+
+	private isFileExcluded(file: TFile): boolean {
+		console.log(file.path)
+		if(file.path.startsWith(this.settings.exclusionPath)) {
+			debugger
+			return true
+		} else {
+			return false
+		}
+	}
+
+	initializeExclusion() {
+		this.app.vault.getMarkdownFiles().forEach( (file) => {
+			if(this.isFileExcluded(file)) {
+				this.vectorStore.deleteFileByPath(file.path)
+			}
+		})
 	}
 
 	async initializePlugin() {
@@ -122,13 +141,13 @@ export default class VaultChat extends Plugin {
 
 		this.registerEvent(this.app.vault.on('create', async (file) => {
 			await indexingPromise
-			if (file instanceof TFile && file.extension === 'md') {
+			if (file instanceof TFile && file.extension === 'md' && !this.isFileExcluded(file)) {
 				await this.vectorStore.addFile(file)
 			}
 		}));
 
 		this.registerEvent(this.app.vault.on('delete', async (file) => {
-			if (file instanceof TFile && file.extension === 'md') {
+			if (file instanceof TFile && file.extension === 'md' && !this.isFileExcluded(file)) {
 				await indexingPromise
 				await this.vectorStore.deleteFileByPath(file.path)
 			}
@@ -136,7 +155,7 @@ export default class VaultChat extends Plugin {
 
 		// todo what happens if there are two calls with two different files within 30s
 		const modifyHandler = debounce(async (file) => {
-			if (file instanceof TFile && file.extension === 'md') {
+			if (file instanceof TFile && file.extension === 'md' && !this.isFileExcluded(file)) {
 				await indexingPromise
 				await this.vectorStore.updateFile(file)
 			}
@@ -146,9 +165,14 @@ export default class VaultChat extends Plugin {
 
 		this.registerEvent(this.app.vault.on('rename', async (file, oldPath) => {
 			if (file instanceof TFile && file.extension === 'md') {
+				console.log("Herro 1")
 				await indexingPromise
 				await this.vectorStore.deleteFileByPath(oldPath)
-				await this.vectorStore.addFile(file)
+				console.log("Herro 2")
+				if(!this.isFileExcluded(file)) {
+					console.log("Herro 3")
+					await this.vectorStore.addFile(file)
+				}
 			}
 		}));
 	}
