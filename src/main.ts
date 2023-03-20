@@ -9,6 +9,7 @@ import {ChatCompletionRequestMessage} from "openai/api";
 import {ChatCompletionResponseMessageRoleEnum} from "openai";
 import {parseMarkdown} from "./NoteProcesser";
 import {SemanticSearchModal} from "./modals/SemanticSearchModal";
+import {NoteChatView, NOTE_CHAT_VIEW} from "./NoteChatView";
 
 const DEFAULT_SETTINGS: VaultChatSettings = {
 	apiKey: 'OpenAI API key goes here',
@@ -18,6 +19,7 @@ const DEFAULT_SETTINGS: VaultChatSettings = {
 export type SearchResult = {
 	name: string;
 	contents: string;
+	abstractFile: TFile;
 }
 const isSearchResult = (item: SearchResult | undefined): item is SearchResult => {
 	return !!item
@@ -64,11 +66,31 @@ export default class VaultChat extends Plugin {
 		const files = this.app.vault.getMarkdownFiles()
 		const indexingPromise = this.vectorStore.updateDatabase(files)
 
+		this.registerView(
+			NOTE_CHAT_VIEW,
+			(leaf) => new NoteChatView(this.app, leaf, this.openAIHandler)
+		);
+
 		this.addCommand({
 			id: 'ask-chatgpt',
 			name: 'Ask ChatGPT',
 			callback: () => {
 				new AskChatGPTModal(this.app, this, this.openAIHandler, this.getSearchResults.bind(this), indexingPromise).open();
+			}
+		});
+
+		this.addCommand({
+			id: 'note-chat',
+			name: 'Note Chat',
+			checkCallback: (checking: boolean) => {
+				const activeFile = this.app.workspace.activeEditor?.file
+				if (activeFile) {
+					if (!checking) {
+						this.showNoteChatView()
+					}
+					return  true
+				}
+				return false
 			}
 		});
 
@@ -132,6 +154,7 @@ export default class VaultChat extends Plugin {
 	}
 
 	onunload() {
+		this.app.workspace.getActiveViewOfType(NoteChatView)?.onClose()
 	}
 
 	async loadSettings() {
@@ -146,7 +169,7 @@ export default class VaultChat extends Plugin {
 		}
 	}
 
-	async getSearchResults(searchTerm: string) {
+	async getSearchResults(searchTerm: string): Promise<Array<SearchResult>> {
 		// HyDE: request note that answers the question https://github.com/texttron/hyde
 		const conversation: Array<ChatCompletionRequestMessage> = []
 		const hydeMessage: ChatCompletionRequestMessage = {
@@ -157,7 +180,7 @@ export default class VaultChat extends Plugin {
 		const hydeResponse = await this.openAIHandler.createChatCompletion(conversation)
 		if (!hydeResponse || hydeResponse.choices.length === 0 || !hydeResponse.choices[0].message) {
 			console.error(`Failed to get hyde response for query: ${searchTerm}`)
-			return
+			return []
 		}
 
 		// create embeddings for that note and all of its blocks
@@ -170,19 +193,19 @@ export default class VaultChat extends Plugin {
 		const embeddings = embeddingsResponse?.data
 		if (!embeddings) {
 			console.error(`Failed to get embeddings for hyde response`)
-			return
+			return []
 		}
 		const searchVectors = embeddings.map(e => e.embedding)
 		// search for matches
 		const nearestVectors = this.vectorStore.getNearestVectors(searchVectors, 8, this.settings.relevanceThreshold)
 		const results = await Promise.all(nearestVectors.map(async (nearest, i) => {
+			const abstractFile = this.app.vault.getAbstractFileByPath(nearest.path) as TFile
 			let name = nearest.path.split('/').last() || ''
 			let contents = nearest.chunk
 			if (nearest.chunk && nearest.chunk.length) {
 				name = name + i // todo
 			}
 			if (!contents) {
-				const abstractFile = this.app.vault.getAbstractFileByPath(nearest.path) as TFile
 				const fileContentsOrEmpty = await this.app.vault.read(abstractFile)
 				let fileContents: string = fileContentsOrEmpty ? fileContentsOrEmpty : ''
 				if (fileContents.length > 1000) {
@@ -192,9 +215,25 @@ export default class VaultChat extends Plugin {
 			}
 			return {
 				name,
-				contents
+				contents,
+				abstractFile
 			}
 		}))
 		return results.filter(isSearchResult)
+	}
+
+	showNoteChatView() {
+		this.app.workspace.detachLeavesOfType(NOTE_CHAT_VIEW);
+		this.app.workspace.getRightLeaf(false).setViewState({
+			type: NOTE_CHAT_VIEW,
+			active: true,
+		}).then(() => {
+			const leavesOfType = this.app.workspace.getLeavesOfType(NOTE_CHAT_VIEW)
+			if (leavesOfType.length > 0) {
+				this.app.workspace.revealLeaf(
+					leavesOfType[0]
+				);
+			}
+		})
 	}
 }

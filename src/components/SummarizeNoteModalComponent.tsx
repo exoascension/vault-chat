@@ -28,7 +28,7 @@ export const SummarizeNoteModalComponent: React.FC<Props> = (props: Props) => {
 				content: `Please summarize this note, which is titled "${fileName}": "${fileContents.substring(0,3000)}"`
 			})
 			const response = await openAIHandler.createChatCompletion(requestMessages)
-			const summaryMessage = response.choices.first()?.message
+			const summaryMessage = response?.choices.first()?.message
 			if (summaryMessage) {
 				setRenderedConversation([summaryMessage])
 			}
@@ -43,7 +43,7 @@ export const SummarizeNoteModalComponent: React.FC<Props> = (props: Props) => {
 				Assistant has been given your note "{fileName}", to summarize.
 			</p>
 			{ renderedConversation.length > 0 ? (
-				<><ChatGPTConversation conversation={renderedConversation}/></>
+				<><ChatGPTConversation className={""} conversation={renderedConversation}/></>
 			) : (
 				<>Loading...</>
 			)}
