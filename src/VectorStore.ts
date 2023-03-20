@@ -92,6 +92,10 @@ export class VectorStore {
 		this.embeddings = newEmbeddings
 		await this.saveEmbeddingsToDatabaseFile()
 
+		if (filesToUpdate.length === 0) {
+			return
+		}
+
 		// create embeddings for the full files first (50 at a time)
 		const chunksOfFilesToUpdate: {file: TFile, contents: string, hash: string, embedding: Vector | undefined }[][] = this.chunkArray(filesToUpdate, 50)
 		for (const chunk of chunksOfFilesToUpdate) {
@@ -132,12 +136,8 @@ export class VectorStore {
 		})
 
 		const chunksToEmbedRequestBatches: {path: string, content: string, embedding: Vector | undefined}[][] = this.batchArrayByTokenCount(chunksToEmbed, 7500)
-		console.debug('Made the following batches for embedding')
-		console.debug(chunksToEmbedRequestBatches)
 		for (const batch of chunksToEmbedRequestBatches) {
 			const batchStrings = batch.map(b => b.content)
-			console.debug('making request of this batch')
-			console.debug(batch)
 			const batchEmbedResponse = await this.createEmbeddingBatch(batchStrings)
 			if (!batchEmbedResponse) {
 				console.log(`batch embed response failed skipping batch`)
@@ -154,7 +154,7 @@ export class VectorStore {
 			const entry = this.embeddings.get(path)
 			if (entry) {
 				entry.chunks = chunkByPath.map(c => ({
-					contents: c.contents,
+					contents: c.content,
 					embedding: c.embedding
 				}))
 			}
@@ -389,6 +389,7 @@ export class VectorStore {
 				currentTokenCount = newTokenCount
 			}
 		}
+		batches.push(batch)
 		return batches
 	}
 }
