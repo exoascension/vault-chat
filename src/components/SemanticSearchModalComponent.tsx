@@ -6,7 +6,7 @@ import {useState} from "react";
 
 interface Props {
 	openAIHandler: OpenAIHandler,
-	getSearchResultsFiles: (searchTerm: string) => Promise<Array<SearchResult>>,
+	getSearchResultsFiles: (searchTerm: string, includeRedundantBlocks: boolean) => Promise<Array<SearchResult>>,
 
 	isIndexingComplete: Promise<void>,
 
@@ -39,7 +39,7 @@ export const SemanticSearchModalComponent: React.FC<Props> = (props: Props) => {
 		setLoading(true)
 		setInputDisabled(true)
 		setButtonDisabled(true)
-		const searchResults = await getSearchResultsFiles(userMessage)
+		const searchResults = await getSearchResultsFiles(userMessage, true)
 		setSearchResults(searchResults)
 		setInputDisabled(false)
 		setButtonDisabled(false)
