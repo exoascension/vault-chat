@@ -35,14 +35,10 @@ export class VaultChatSettingTab extends PluginSettingTab {
 					await this.plugin.saveSettings();
 				}));
 
-		// TODO validation
-		// TODO regex
-		// TODO exclude on tags
 		new Setting(containerEl)
 			.setName('Exclusion Path')
 			.setDesc('Path to exclude from OpenAI indexing. Example: `sensitive-folder/` For private files you don\'t want sent to OpenAI for training your model.')
 			.addText(text => text
-				.setPlaceholder('fake-sensitive-folder/')
 				.setValue(this.plugin.settings.exclusionPath)
 				.onChange(async (value) => this.provisionalExclusionPath = value))
 			.addButton(button => button.

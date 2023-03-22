@@ -14,7 +14,7 @@ import {NoteChatView, NOTE_CHAT_VIEW} from "./NoteChatView";
 const DEFAULT_SETTINGS: VaultChatSettings = {
 	apiKey: 'OpenAI API key goes here',
 	relevanceThreshold: 0.01,
-	exclusionPath: "fake-sensitive-folder/"
+	exclusionPath: "vault-chat-exclusions/"
 }
 
 export type SearchResult = {
@@ -61,7 +61,6 @@ export default class VaultChat extends Plugin {
 	}
 
 	initializeExclusion() {
-		debugger
 		console.log(this.settings.exclusionPath)
 		this.vectorStore.setExclusionPath(this.settings.exclusionPath)
 		this.vectorStore.deleteByPathPrefix()
