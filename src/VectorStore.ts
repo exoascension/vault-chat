@@ -54,12 +54,28 @@ export class VectorStore {
 		tokensPerInterval: 20,
 		interval: "minute"
 	})
-	constructor(vault: Vault, createEmbeddingBatch: CreateEmbeddingFunction, createCompletion: CreateCompletionFunction) {
+
+	private exclusionPath: string
+
+	constructor(vault: Vault, createEmbeddingBatch: CreateEmbeddingFunction, createCompletion: CreateCompletionFunction, exclusionPath: string) {
 		this.vault = vault
 		this.createEmbeddingBatch = (textsToEmbed) => this.throttler.throttleCall(() => createEmbeddingBatch(textsToEmbed))
 		this.createCompletion = createCompletion
 		this.tokenizer = new GPT3Tokenizer({ type: "gpt3" })
 		this.debounceSave = debounce(this.saveEmbeddingsToDatabaseFile, 30000, true)
+		this.exclusionPath = exclusionPath
+	}
+
+	setExclusionPath(exclusionPath: string) {
+		this.exclusionPath = exclusionPath
+	}
+
+	private isFilePathExcluded(file: string): boolean {
+		return (!!this.exclusionPath && !!this.exclusionPath.trim() && file.startsWith(this.exclusionPath))
+	}
+
+	private isFileExcluded(file: TFile): boolean {
+		return this.isFilePathExcluded(file.path)
 	}
 
 	async initDatabase() {
@@ -67,11 +83,12 @@ export class VectorStore {
 	}
 
 	async updateDatabase(latestFiles: TFile[]) {
+		const filesWithoutExclusions = latestFiles.filter(f => !this.isFileExcluded(f))
 		const newEmbeddings: Map<string, FileEntry> = new Map()
 
 		// get list of files that are new or have changed
 		const filesToUpdate: {file: TFile, contents: string, hash: string, embedding: Vector | undefined }[] = []
-		for (const file of latestFiles) {
+		for (const file of filesWithoutExclusions) {
 			const oldFileEntry = this.embeddings.get(file.path)
 			const fileContents = await this.vault.read(file)
 			const newHash = this.generateMd5Hash(fileContents)
@@ -202,7 +219,7 @@ export class VectorStore {
 		}
 	}
 
-	async convertEntriesToEmbeddingsMap(entriesToUpdate: FileEntryUpdate[]): Promise<Map<string, FileEntry> | undefined>  {
+	private async convertEntriesToEmbeddingsMap(entriesToUpdate: FileEntryUpdate[]): Promise<Map<string, FileEntry> | undefined>  {
 		const newEmbeddings: Map<string, FileEntry> = new Map()
 		if (!entriesToUpdate || entriesToUpdate.length === 0) {
 			return
@@ -240,6 +257,9 @@ export class VectorStore {
 	}
 
 	async addFile(file: TFile) {
+		if(this.isFileExcluded(file)) {
+			return
+		}
 		const existingFile = this.embeddings.get(file.path)
 		if (existingFile) return
 		const fileContents = await this.vault.read(file)
@@ -253,6 +273,7 @@ export class VectorStore {
 	}
 
 	async updateFile(file: TFile) {
+		if (this.isFileExcluded(file)) return
 		const existingFile = this.embeddings.get(file.path)
 		if (existingFile) {
 			const fileContents = await this.vault.read(file)
@@ -275,6 +296,20 @@ export class VectorStore {
 		this.embeddings.delete(filePath)
 		await this.debounceSave()
 	}
+
+	deleteByPathPrefix() {
+		const keysToBeDeleted: string[] = []
+		for (const key of this.embeddings.keys()) {
+			if(this.isFilePathExcluded(key)) {
+				keysToBeDeleted.push(key)
+			}
+		}
+		keysToBeDeleted.forEach(k => {
+			this.embeddings.delete(k)
+		})
+		this.debounceSave()
+	}
+
 
 	private generateMd5Hash(content: string) {
 		return Md5.hashStr(content)

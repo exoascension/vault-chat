@@ -13,7 +13,8 @@ import {NoteChatView, NOTE_CHAT_VIEW} from "./NoteChatView";
 
 const DEFAULT_SETTINGS: VaultChatSettings = {
 	apiKey: 'OpenAI API key goes here',
-	relevanceThreshold: 0.01
+	relevanceThreshold: 0.01,
+	exclusionPath: "vault-chat-exclusions/"
 }
 
 export type SearchResult = {
@@ -52,16 +53,23 @@ export default class VaultChat extends Plugin {
 		}
 	}
 
-	apiKeyIsValid() {
+	private apiKeyIsValid() {
 		return this.settings.apiKey
 			&& this.settings.apiKey !== ''
 			&& this.settings.apiKey !== DEFAULT_SETTINGS.apiKey
 			&& this.settings.apiKey.length > 30
 	}
 
+	initializeExclusion() {
+		this.vectorStore.setExclusionPath(this.settings.exclusionPath)
+		this.vectorStore.deleteByPathPrefix()
+		const files = this.app.vault.getMarkdownFiles()
+		this.vectorStore.updateDatabase(files)
+	}
+
 	async initializePlugin() {
 		this.openAIHandler = new OpenAIHandler(this.settings.apiKey)
-		this.vectorStore = new VectorStore(this.app.vault, this.openAIHandler.createEmbeddingBatch, this.openAIHandler.createChatCompletion)
+		this.vectorStore = new VectorStore(this.app.vault, this.openAIHandler.createEmbeddingBatch, this.openAIHandler.createChatCompletion, this.settings.exclusionPath)
 		await this.vectorStore.initDatabase()
 		const files = this.app.vault.getMarkdownFiles()
 		const indexingPromise = this.vectorStore.updateDatabase(files)
