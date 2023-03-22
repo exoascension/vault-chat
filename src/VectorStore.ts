@@ -1,4 +1,4 @@
-import {TFile, Vault} from 'obsidian';
+import {debounce, Debouncer, TFile, Vault} from 'obsidian';
 import {Md5} from 'ts-md5';
 import GPT3Tokenizer from "gpt3-tokenizer";
 import {
@@ -49,6 +49,7 @@ export class VectorStore {
 	private readonly createEmbeddingBatch: CreateEmbeddingFunction
 	private readonly createCompletion: CreateCompletionFunction
 	private tokenizer: GPT3Tokenizer
+	private debounceSave: Debouncer<[], Promise<void>>
 	private throttler = new Throttler({
 		tokensPerInterval: 20,
 		interval: "minute"
@@ -58,6 +59,7 @@ export class VectorStore {
 		this.createEmbeddingBatch = (textsToEmbed) => this.throttler.throttleCall(() => createEmbeddingBatch(textsToEmbed))
 		this.createCompletion = createCompletion
 		this.tokenizer = new GPT3Tokenizer({ type: "gpt3" })
+		this.debounceSave = debounce(this.saveEmbeddingsToDatabaseFile, 30000, true)
 	}
 
 	async initDatabase() {
@@ -247,7 +249,7 @@ export class VectorStore {
 		if (fileEntry) {
 			this.embeddings.set(file.path, fileEntry)
 		}
-		await this.saveEmbeddingsToDatabaseFile() // todo debounce
+		await this.debounceSave()
 	}
 
 	async updateFile(file: TFile) {
@@ -266,12 +268,12 @@ export class VectorStore {
 		} else {
 			await this.addFile(file)
 		}
-		await this.saveEmbeddingsToDatabaseFile() // todo debounce
+		await this.debounceSave()
 	}
 
 	async deleteFileByPath(filePath: string) {
 		this.embeddings.delete(filePath)
-		await this.saveEmbeddingsToDatabaseFile() // todo debounce
+		await this.debounceSave()
 	}
 
 	private generateMd5Hash(content: string) {
@@ -314,12 +316,13 @@ export class VectorStore {
 		return highestSimilarity
 	}
 
-	getNearestVectors(searchVectors: Vector[], resultNumber: number, relevanceThreshold: number): NearestVectorResult[] {
+	getNearestVectors(searchVectors: Vector[], resultNumber: number, relevanceThreshold: number, includeRedundantBlocks: boolean): NearestVectorResult[] {
 		const nearestVectors: NearestVectorResult[] = []
 
 		for (const entry of this.embeddings.entries()) {
 			const filePath = entry[0]
 			const fileEntry = entry[1]
+			let addedFile = false
 			if (fileEntry.embedding && fileEntry.embedding.length) {
 				const fileSimilarity = this.computeSimilarity(searchVectors, fileEntry.embedding)
 				nearestVectors.push({
@@ -327,17 +330,20 @@ export class VectorStore {
 					chunk: undefined,
 					similarity: fileSimilarity
 				})
+				addedFile = true
 			}
-			fileEntry.chunks.forEach(chunk => {
-				if (chunk.embedding && chunk.embedding.length) {
-					const chunkSimilarity = this.computeSimilarity(searchVectors, chunk.embedding)
-					nearestVectors.push({
-						path: filePath,
-						chunk: chunk.contents,
-						similarity: chunkSimilarity
-					})
-				}
-			})
+			if (includeRedundantBlocks || !addedFile) {
+				fileEntry.chunks.forEach(chunk => {
+					if (chunk.embedding && chunk.embedding.length) {
+						const chunkSimilarity = this.computeSimilarity(searchVectors, chunk.embedding)
+						nearestVectors.push({
+							path: filePath,
+							chunk: chunk.contents,
+							similarity: chunkSimilarity
+						})
+					}
+				})
+			}
 		}
 
 		nearestVectors.sort((a, b) => {

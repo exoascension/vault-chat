@@ -169,7 +169,7 @@ export default class VaultChat extends Plugin {
 		}
 	}
 
-	async getSearchResults(searchTerm: string): Promise<Array<SearchResult>> {
+	async getSearchResults(searchTerm: string, includeRedundantBlocks: boolean): Promise<Array<SearchResult>> {
 		// HyDE: request note that answers the question https://github.com/texttron/hyde
 		const conversation: Array<ChatCompletionRequestMessage> = []
 		const hydeMessage: ChatCompletionRequestMessage = {
@@ -197,7 +197,7 @@ export default class VaultChat extends Plugin {
 		}
 		const searchVectors = embeddings.map(e => e.embedding)
 		// search for matches
-		const nearestVectors = this.vectorStore.getNearestVectors(searchVectors, 8, this.settings.relevanceThreshold)
+		const nearestVectors = this.vectorStore.getNearestVectors(searchVectors, 8, this.settings.relevanceThreshold, includeRedundantBlocks)
 		const results = await Promise.all(nearestVectors.map(async (nearest, i) => {
 			const abstractFile = this.app.vault.getAbstractFileByPath(nearest.path) as TFile
 			let name = nearest.path.split('/').last() || ''

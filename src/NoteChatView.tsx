@@ -52,7 +52,7 @@ export class NoteChatView extends ItemView {
 	async onOpen() {
 		const activeFileAbstract = this.app.workspace.activeEditor?.file
 		if (!(activeFileAbstract instanceof TFile)) {
-			console.error('Encountered unexpected file type in Note Chat')
+			console.debug('Encountered unexpected file type in Note Chat')
 			return
 		}
 		this.isOpen = true

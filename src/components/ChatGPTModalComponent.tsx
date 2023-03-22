@@ -10,7 +10,7 @@ import {SearchInput} from "./SearchInput";
 
 interface Props {
 	openAIHandler: OpenAIHandler,
-	getSearchResultsFiles: (searchTerm: string) => Promise<Array<SearchResult>>,
+	getSearchResultsFiles: (searchTerm: string, includeRedundantBlocks: boolean) => Promise<Array<SearchResult>>,
 
 	isIndexingComplete: Promise<void>,
 
@@ -25,7 +25,6 @@ export const ChatGPTModalComponent: React.FC<Props> = (props: Props) => {
 	const [userMessage, setUserMessage] = useState('')
 	const [buttonDisabled, setButtonDisabled] = useState(true)
 	const [inputDisabled, setInputDisabled] = useState(false)
-	const [tokensUsedSoFar, setTokensUsedSoFar] = useState(0)
 	const [showIndexingBanner, setShowIndexingBanner] = useState(true)
 
 	isIndexingComplete.then(() => {
@@ -38,9 +37,12 @@ export const ChatGPTModalComponent: React.FC<Props> = (props: Props) => {
 
 	const onClickSubmit = async () => {
 		setButtonDisabled(true)
+		setUserMessage('Loading...')
+		setInputDisabled(true)
+
 		// new conversation request will use the internalConversation so the assistant has all necessary history
 		const newInternalConversation: Array<ChatCompletionRequestMessage> = Object.assign([], internalConversation);
-		const searchResults = await getSearchResultsFiles(userMessage)
+		const searchResults = await getSearchResultsFiles(userMessage, false)
 
 		const systemMessageForContext: ChatCompletionRequestMessage = {
 			role: 'system',
@@ -52,9 +54,6 @@ export const ChatGPTModalComponent: React.FC<Props> = (props: Props) => {
 			role: 'user',
 			content: userMessage
 		})
-
-		setUserMessage('Loading...')
-		setInputDisabled(true)
 
 		const response = await openAIHandler.createChatCompletion(newInternalConversation)
 		if (!response) {
@@ -75,7 +74,6 @@ export const ChatGPTModalComponent: React.FC<Props> = (props: Props) => {
 		// be mindful of the 4096 token limit and remove some old context if we're getting close
 		const responseTokensTotal = response.usage?.total_tokens
 		if (responseTokensTotal) {
-			setTokensUsedSoFar(responseTokensTotal)
 			if (responseTokensTotal > 3000) {
 				const indexOfOldestSystemMessage =
 					newInternalConversation.findIndex(message => message.role === 'system')

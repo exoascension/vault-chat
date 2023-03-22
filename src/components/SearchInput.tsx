@@ -17,7 +17,7 @@ export const SearchInput: React.FC<Props> = (props: Props) => {
 	}
 	return (
 		<div className={`chat-input-layout ${className}`}>
-			<input className={'chat-input-input'} type="text" name="user-message" value={userMessage} onChange={userMessageOnChange} onKeyDown={handleKeyDown} disabled={inputDisabled}/>
+			<input autoFocus className={'chat-input-input'} type="text" name="user-message" value={userMessage} onChange={userMessageOnChange} onKeyDown={handleKeyDown} disabled={inputDisabled}/>
 			<button className={buttonDisabled ? 'button-disabled' : ''} disabled={buttonDisabled} onClick={onClickSubmit}>Submit</button>
 		</div>
 	)
