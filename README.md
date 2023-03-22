@@ -16,6 +16,9 @@ Command - `Vault Chat: Summarize note`
 Command - `Vault Chat: Semantic search`
 <img width="598" alt="Screen Shot 2023-03-19 at 9 33 41 PM" src="https://user-images.githubusercontent.com/3997573/226227074-21157e71-0955-46b7-a86c-31f16801bc1c.png">
 
+#### Chat with ChatGPT about your active note
+Command - `Vault Chat: Note Chat`
+<img width="1226" alt="Screen Shot 2023-03-20 at 5 38 32 PM" src="https://user-images.githubusercontent.com/3997573/226485650-86a180c7-75b7-4e2c-aaea-42b16f78ec0c.png">
 ## Usage
 
 To use the plugin, you must have an [OpenAI](https://platform.openai.com/) account, create an API key, and enter the key in the plugin settings.
