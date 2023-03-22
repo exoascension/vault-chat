@@ -14,6 +14,7 @@ export class VaultChatSettingTab extends PluginSettingTab {
 	constructor(app: App, plugin: VaultChat) {
 		super(app, plugin);
 		this.plugin = plugin;
+		this.provisionalExclusionPath = plugin.settings.exclusionPath
 	}
 	
 	display(): void {
