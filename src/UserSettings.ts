@@ -1,4 +1,4 @@
-import {App, ButtonComponent, PluginSettingTab, Setting} from 'obsidian'
+import {App, PluginSettingTab, Setting} from 'obsidian'
 import VaultChat from './main'
 
 export interface VaultChatSettings {
@@ -41,9 +41,9 @@ export class VaultChatSettingTab extends PluginSettingTab {
 			.addText(text => text
 				.setValue(this.plugin.settings.exclusionPath)
 				.onChange(async (value) => this.provisionalExclusionPath = value))
-			.addButton(button => button.
-				setButtonText("Set Exclusion")
-				.onClick(async _ => {
+			.addButton(button => button
+				.setButtonText("Set Exclusion")
+				.onClick(async () => {
 					this.plugin.settings.exclusionPath = this.provisionalExclusionPath;
 					await this.plugin.saveSettings();
 					this.plugin.initializeExclusion()

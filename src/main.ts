@@ -61,11 +61,10 @@ export default class VaultChat extends Plugin {
 	}
 
 	initializeExclusion() {
-		console.log(this.settings.exclusionPath)
 		this.vectorStore.setExclusionPath(this.settings.exclusionPath)
 		this.vectorStore.deleteByPathPrefix()
 		const files = this.app.vault.getMarkdownFiles()
-		this.vectorStore.updateDatabase(files) // TODO trigger re-indexing
+		this.vectorStore.updateDatabase(files)
 	}
 
 	async initializePlugin() {

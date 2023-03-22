@@ -71,7 +71,7 @@ export class VectorStore {
 	}
 
 	private isFilePathExcluded(file: string): boolean {
-		return (!!this.exclusionPath.trim() && file.startsWith(this.exclusionPath))
+		return (!!this.exclusionPath && !!this.exclusionPath.trim() && file.startsWith(this.exclusionPath))
 	}
 
 	private isFileExcluded(file: TFile): boolean {
@@ -258,7 +258,6 @@ export class VectorStore {
 
 	async addFile(file: TFile) {
 		if(this.isFileExcluded(file)) {
-			console.log("Skipping excluded file")
 			return
 		}
 		const existingFile = this.embeddings.get(file.path)
@@ -298,18 +297,17 @@ export class VectorStore {
 		await this.debounceSave()
 	}
 
-	async deleteByPathPrefix() {
+	deleteByPathPrefix() {
 		const keysToBeDeleted: string[] = []
 		for (const key of this.embeddings.keys()) {
 			if(this.isFilePathExcluded(key)) {
-				console.log("Excluded Path:" + key)
 				keysToBeDeleted.push(key)
 			}
 		}
 		keysToBeDeleted.forEach(k => {
 			this.embeddings.delete(k)
 		})
-		await this.saveEmbeddingsToDatabaseFile() // todo debounce
+		this.debounceSave()
 	}
 
 
