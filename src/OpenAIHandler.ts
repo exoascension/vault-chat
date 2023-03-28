@@ -36,7 +36,7 @@ export class OpenAIHandler {
 		try {
 			const response = await backOff(() => {
 				return pTimeout(this.openai.createChatCompletion({
-					"model": "gpt-3.5-turbo",
+					"model": "gpt-4",
 					messages
 				}), { milliseconds: 30000 })
 			}, options)
