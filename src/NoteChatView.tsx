@@ -25,7 +25,7 @@ export class NoteChatView extends ItemView {
 		super(leaf);
 		this.app = app
 		this.openAIHandler = openAIHandler
-		this.app.workspace.on('layout-change', () => {
+		this.app.workspace.on('file-open', () => {
 			setTimeout(async () => {
 				const activeFile = this.app.workspace.getActiveFile()
 				if (this.isOpen && this.currentFile !== "") {
